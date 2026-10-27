@@ -218,7 +218,7 @@ const server = http.createServer(async (req, res) => {
     // 钱包追踪页
     if (req.method === "GET" && req.url === "/track") {
       const html = readFileSync(here("./track.html"), "utf8").replace("__PANEL_TOKEN__", TOKEN);
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'self'; img-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'" });
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'self'; img-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'" });
       return res.end(html);
     }
     // 钱包追踪:关注列表 / 动态(数据只在本机 panel/track.json、track-feed.jsonl)
@@ -234,10 +234,15 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && req.url === "/scan") {
       const html = readFileSync(here("./scan.html"), "utf8").replace("__PANEL_TOKEN__", TOKEN);
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'self'; img-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'" });
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'self'; img-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'" });
       return res.end(html);
     }
     // 本地图表库(TradingView Lightweight Charts 4.2.0,Apache-2.0,和官方发布文件逐字节一致)
+    // 中英文切换(页面加载时最先执行)
+    if (req.method === "GET" && req.url === "/i18n.js") {
+      res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" });
+      return res.end(readFileSync(here("./i18n.js")));
+    }
     // TM 图标(浏览器标签页)
     if (req.method === "GET" && (req.url === "/favicon.svg" || req.url === "/favicon.ico")) {
       res.writeHead(200, { "content-type": "image/svg+xml", "cache-control": "private, max-age=86400" });

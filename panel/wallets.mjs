@@ -205,6 +205,8 @@ let ov = null, ovBusy = null;
 export async function walletsOverview({ force = false } = {}) {
   const rebuild = () => (ovBusy ??= buildOverview().then((data) => ((ov = { at: Date.now(), data }), data)).finally(() => (ovBusy = null)));
   if (!force && ov) { if (Date.now() - ov.at > 15_000) rebuild().catch(() => {}); return { ...ov.data, cachedAt: ov.at }; }
+  // 强制刷新(刚下完单)时如果已经有一轮在跑,那一轮是下单前开始的、结果是旧的:等它跑完再重新查一轮
+  if (force && ovBusy) { await ovBusy.catch(() => {}); return rebuild(); }
   return rebuild();
 }
 async function buildOverview() {

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TIGER POWER · 内盘交易终端</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<script src="/i18n.js"></script>
 <style>
   :root {
     --bg:#0a0c0f; --s1:#101318; --s2:#151920; --s3:#1b2029; --line:#1e232c; --line2:#2a313d;
@@ -560,7 +561,7 @@ $("tipGo").onclick = async () => {
   } catch (e) { failed = true; line("✗ " + e.message); }
   btn.disabled = false; btn.textContent = `打赏 ${amount} BNB`;
   toast(failed ? "打赏没成功,看下面的记录" : "🙏 谢谢支持!", failed ? "err" : "ok");
-  if (!failed) { $("tipMemo").value = ""; loadWallets(true); }
+  if (!failed) { $("tipMemo").value = ""; refreshWalletsSoon(); }
 };
 // 从扫链 / 追踪页点「打赏作者」过来:?tip=1 直接打开
 if (new URLSearchParams(location.search).get("tip") === "1") setTimeout(openTip, 600);
@@ -1293,7 +1294,7 @@ function openXfer(acct) {
     btn.disabled = false; btn.textContent = "转出";
     if (!failed) { try { localStorage.setItem("sendRecent", JSON.stringify([to, ...sndRecent().filter((x) => x.toLowerCase() !== to.toLowerCase())].slice(0, 5))); } catch {} }
     toast(failed ? "转出失败,看下面的记录" : `${cur.symbol} 已转出`, failed ? "err" : "ok");
-    load(cur.ca, { quiet: true }); loadWallets(true);
+    load(cur.ca, { quiet: true }); refreshWalletsSoon();
   };
 }
 
@@ -1376,7 +1377,7 @@ async function order(action, arg, acctOverride) {
   $("ordS").className = "chipst " + (failed ? "err" : "ok"); $("ordS").textContent = failed ? "失败" : "完成";
   toast((failed ? "失败:" : "完成:") + title, failed ? "err" : "ok");
   renderTrade();
-  load(cur.ca, { quiet: true }); loadTrades(); loadWallets(true);
+  load(cur.ca, { quiet: true }); loadTrades(); refreshWalletsSoon();
 }
 
 // ---------- 转账(账户总览):BNB 走币安钱包 send,代币走 transfer.mjs(先 preview 风控) ----------
@@ -1482,7 +1483,7 @@ async function doSend() {
   }
   toast(failed ? "转账失败,看下面的记录" : "转账完成", failed ? "err" : "ok");
   renderSend(true);
-  loadWallets(true);
+  refreshWalletsSoon();
 }
 
 // ---------- Gang:发币宣言 + 多空对决(gang.fun 的交易附言) ----------
@@ -1628,6 +1629,13 @@ function renderHoldings() {
   renderSideSel();
 }
 let walT2 = null;
+// 刚下完单 / 转完账:余额马上刷一次,4 秒、15 秒后再各刷一次(公共节点常落后一两个块,外盘成交也没有链上推送提醒刷新)
+let soonT = [];
+function refreshWalletsSoon() {
+  soonT.forEach(clearTimeout);
+  loadWallets(true);
+  soonT = [setTimeout(() => loadWallets(true), 4000), setTimeout(() => loadWallets(true), 15000)];
+}
 async function loadWallets(force = false, retry = true) {
   try {
     const r = await post("/api/wallets", { force });
