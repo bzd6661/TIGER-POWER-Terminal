@@ -26,6 +26,41 @@ export const detectProxy = () => (process.env.AGENTBUY_NO_PROXY === "1" ? null :
 
 let undici = null;
 try { undici = await import("undici"); } catch { /* 没装 undici:代理不生效(npm install 会装上) */ }
+
+// ---------- 不走代理时:币安的域名改用加密 DNS(DoH)解析 ----------
+// 中国大陆的普通 DNS 会把 www.binance.com 解析到假地址(比如土耳其的 156.233.67.243),连接直接超时;
+// 浏览器能上是因为走了代理或「安全 DNS」。这里对币安相关域名改问阿里 / 腾讯的 DoH(国内能访问、答案是真的 CloudFront 地址),
+// 其他域名照常用系统 DNS。查不到就退回系统 DNS。
+import { lookup as sysLookup } from "node:dns";
+import https from "node:https";
+const DOH_HOSTS = /(^|\.)(binance\.com|binance\.info|binance\.me|bnbstatic\.com|binanceapi\.com)$/i;
+const DOH = ["https://223.5.5.5/resolve?name=", "https://dns.alidns.com/resolve?name=", "https://doh.pub/resolve?name="];
+const dohCache = new Map();   // host → { at, ips }
+const getJson = (u) => new Promise((res, rej) => {
+  const req = https.get(u, { timeout: 4000 }, (r) => { let d = ""; r.on("data", (c) => (d += c)); r.on("end", () => { try { res(JSON.parse(d)); } catch (e) { rej(e); } }); });
+  req.on("error", rej); req.on("timeout", () => req.destroy(new Error("DoH timeout")));
+});
+async function dohResolve(host) {
+  const hit = dohCache.get(host);
+  if (hit && Date.now() - hit.at < 300_000) return hit.ips;
+  for (const base of DOH) {
+    try {
+      const j = await getJson(base + encodeURIComponent(host) + "&type=1");
+      const ips = (j.Answer ?? []).filter((a) => a.type === 1).map((a) => a.data);
+      if (ips.length) { dohCache.set(host, { at: Date.now(), ips }); return ips; }
+    } catch { /* 换下一个 */ }
+  }
+  return null;
+}
+function smartLookup(host, opts, cb) {
+  if (typeof opts === "function") { cb = opts; opts = {}; }
+  if (!DOH_HOSTS.test(host)) return sysLookup(host, opts, cb);
+  dohResolve(host).then((ips) => {
+    if (!ips) return sysLookup(host, opts, cb);
+    if (opts?.all) return cb(null, ips.map((address) => ({ address, family: 4 })));
+    cb(null, ips[0], 4);
+  }, () => sysLookup(host, opts, cb));
+}
 let current;
 function apply(p) {
   if (p === current) return;
@@ -40,7 +75,7 @@ function apply(p) {
   // undici 会打印一句「EnvHttpProxyAgent 是实验功能」的警告,混进脚本输出里没用:只屏蔽这一条
   const emit = process.emitWarning;
   process.emitWarning = (w, ...rest) => { if (/EnvHttpProxyAgent is experimental/.test(String(w))) return; return emit.call(process, w, ...rest); };
-  try { undici.setGlobalDispatcher(p ? new undici.EnvHttpProxyAgent() : new undici.Agent()); } finally { process.emitWarning = emit; }
+  try { undici.setGlobalDispatcher(p ? new undici.EnvHttpProxyAgent() : new undici.Agent({ connect: { lookup: smartLookup } })); } finally { process.emitWarning = emit; }
 }
 apply(detectProxy());
 setInterval(() => apply(detectProxy()), 30_000).unref();   // unref:不会让短命的脚本因为这个定时器不退出

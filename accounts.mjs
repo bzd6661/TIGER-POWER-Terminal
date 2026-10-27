@@ -38,15 +38,15 @@ if (BAW1_ENTRY && !process.env.BAW1_ENTRY) process.env.BAW1_ENTRY = BAW1_ENTRY;
 // 演示 / 测试用:设了 AGENTBUY_BAW1_DIR 时,账号 1 也用 baw2 那份(凭证存文件、不碰 Windows 凭据管理器),存到指定目录,
 // 保证不会覆盖本机真实的账号 1 登录
 const BAW1_DIR = process.env.AGENTBUY_BAW1_DIR || null;
-// 有代理时 baw 子进程先加载 proxy.mjs(它的网络请求都走代理);每次调用都按当前代理(中途开关系统代理也跟得上)
+// baw 子进程先加载 proxy.mjs:有代理就走代理(每次调用按当前代理,中途开关系统代理也跟得上);没代理时币安域名改用加密 DNS 解析(防 DNS 污染)
 const PROXY_URL = pathToFileURL(here("./proxy.mjs")).href;
 export function bawSpawn(acct, cliArgs) {
-  const pre = getProxy() ? ["--import", PROXY_URL] : [];
+  const pre = ["--import", PROXY_URL];
   const env = { ...process.env, ...(getProxy() ? { HTTPS_PROXY: getProxy(), HTTP_PROXY: getProxy() } : {}) };
   if (acct === "2") return spawn(process.execPath, [...pre, BAW2_ENTRY, ...cliArgs], { env: { ...env, BINANCE_BAW_DIR: BAW2_DIR } });
   if (BAW1_DIR) return spawn(process.execPath, [...pre, BAW2_ENTRY, ...cliArgs], { env: { ...env, BINANCE_BAW_DIR: BAW1_DIR } });
   if (BAW1_ENTRY) return spawn(process.execPath, [...pre, BAW1_ENTRY, ...cliArgs], { env });
-  return spawn("baw", cliArgs, { shell: true, env: getProxy() ? { ...env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import ${PROXY_URL}`.trim() } : env });
+  return spawn("baw", cliArgs, { shell: true, env: { ...env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import ${PROXY_URL}`.trim() } });
 }
 
 // --acct both:把当前脚本对两个账号各跑一遍(并行),退出码取最差的
