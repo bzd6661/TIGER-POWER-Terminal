@@ -1,0 +1,9 @@
+{
+  "name": "agentbuy",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "ethers": "6.13.4",
+    "qrcode": "1.5.4"
+  }
+}

@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TIGER POWER · 钱包追踪</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  :root {
+    --bg:#0a0c0f; --s1:#101318; --s2:#151920; --s3:#1b2029; --line:#1e232c; --line2:#2a313d;
+    --text:#e7eaf0; --mute:#8d96a7; --faint:#5b6372;
+    --up:#16c784; --up-bg:rgba(22,199,132,.12); --down:#ea3943; --down-bg:rgba(234,57,67,.12);
+    --acc:#f0b90b; --blue:#3b82f6; --blue-bg:rgba(59,130,246,.14);
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:13px/1.45 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  body { display:flex; flex-direction:column; overflow:hidden; }
+  button, input, select { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  a { color:inherit; }
+  .num { font-variant-numeric:tabular-nums; } .mono { font-family:Consolas, monospace; }
+  .mute { color:var(--mute); } .faint { color:var(--faint); } .up { color:var(--up); } .down { color:var(--down); }
+  ::-webkit-scrollbar { width:5px; height:5px; } ::-webkit-scrollbar-thumb { background:#2a313d; border-radius:3px; } ::-webkit-scrollbar-track { background:transparent; }
+  .top { flex:0 0 50px; display:flex; align-items:center; gap:14px; padding:0 14px; border-bottom:1px solid var(--line); background:var(--s1); }
+  .brand { display:flex; align-items:center; gap:8px; font-weight:700; font-size:15px; white-space:nowrap; }
+  .xlink { display:inline-flex; align-items:center; gap:6px; flex:none; color:var(--text); background:var(--s3); text-decoration:none; font-size:12px; font-weight:600; padding:5px 10px; border:1px solid var(--line2); border-radius:999px; }
+  .xlink svg { width:13px; height:13px; } .xlink:hover { border-color:var(--acc); color:var(--acc); }
+  @media (max-width:1100px) { .xlink span { display:none; } }
+  .brand .tmlogo { width:24px; height:24px; flex:none; display:block; filter:drop-shadow(0 1px 4px rgba(240,185,11,.25)); }
+  .brand > span { font-weight:800; letter-spacing:.5px; } .brand .tmsub { font-size:11px; font-weight:500; color:var(--mute); margin-left:-2px; }
+  @media (max-width:820px) { .brand .tmsub { display:none; } }
+  .setwrap { position:relative; flex:none; }
+  .setbtn { background:var(--s2); border:1px solid var(--line2); border-radius:999px; padding:6px 12px; font-size:13px; color:var(--text); white-space:nowrap; text-decoration:none; display:inline-block; }
+  .setbtn:hover, .setbtn.on { border-color:var(--acc); }
+  .setmenu { position:absolute; right:0; top:calc(100% + 8px); z-index:70; width:290px; background:var(--s1); border:1px solid var(--line2); border-radius:12px; padding:6px; box-shadow:0 12px 32px rgba(0,0,0,.5); }
+  .setmenu button { display:flex; align-items:center; gap:10px; width:100%; background:none; border:0; border-radius:8px; padding:8px 10px; text-align:left; color:var(--text); }
+  .setmenu button:hover { background:var(--s3); } .setmenu .mi { width:26px; text-align:center; font-size:16px; }
+  .setmenu b { display:block; font-size:13px; } .setmenu small { display:block; font-size:11px; color:var(--faint); }
+  .secflash { animation:secflash 1.6s ease-out; } @keyframes secflash { 0% { box-shadow:0 0 0 2px var(--acc); } 100% { box-shadow:0 0 0 2px transparent; } }
+  @media (max-width:820px) { .setbtn { padding:5px 9px; font-size:12px; } }
+  .setmenu a.setitem { display:flex; align-items:center; gap:10px; border-radius:8px; padding:8px 10px; color:var(--text); text-decoration:none; } .setmenu a.setitem:hover { background:var(--s3); }
+  .tipbtn { flex:none; border:0; border-radius:999px; padding:7px 14px; font-weight:800; font-size:13px; color:#1a1300; background:linear-gradient(135deg,#F8D33A,#E8890C); text-decoration:none; white-space:nowrap; box-shadow:0 0 0 0 rgba(240,185,11,.55); animation:tippulse 2.6s ease-out infinite; }
+  .tipbtn:hover { filter:brightness(1.08); animation:none; box-shadow:0 0 14px rgba(240,185,11,.55); }
+  @keyframes tippulse { 0% { box-shadow:0 0 0 0 rgba(240,185,11,.55); } 70% { box-shadow:0 0 0 9px rgba(240,185,11,0); } 100% { box-shadow:0 0 0 0 rgba(240,185,11,0); } }
+  .nav { display:flex; gap:4px; }
+  .nav a { color:var(--mute); text-decoration:none; padding:6px 10px; border-radius:8px; white-space:nowrap; font-size:13px; } .nav a.on, .nav a:hover { color:var(--text); background:var(--s3); }
+  .livetag { display:flex; align-items:center; gap:6px; color:var(--mute); font-size:12px; } .dot { width:7px; height:7px; border-radius:50%; background:var(--faint); } .dot.on { background:var(--up); box-shadow:0 0 6px var(--up); } .dot.off { background:var(--down); }
+  .main { flex:1; display:flex; min-height:0; }
+  .side { flex:0 0 320px; border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; background:var(--s1); }
+  .add { padding:12px; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:6px; }
+  .add input, .add select { background:var(--s2); border:1px solid var(--line2); border-radius:7px; padding:6px 9px; outline:0; width:100%; }
+  .add .row { display:flex; gap:6px; }
+  .btn { background:var(--acc); color:#1a1300; border:0; border-radius:7px; padding:6px 14px; font-weight:700; white-space:nowrap; }
+  .btn:disabled { opacity:.5; }
+  .groups { display:flex; flex-wrap:wrap; gap:4px; padding:8px 12px; border-bottom:1px solid var(--line); }
+  .groups button { background:none; border:1px solid transparent; color:var(--mute); border-radius:6px; padding:2px 8px; font-size:12px; }
+  .groups button.on { border-color:var(--line2); color:var(--text); background:var(--s3); }
+  .tlist { flex:1; overflow:auto; }
+  .titem { padding:9px 12px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .titem:hover { background:var(--s2); } .titem.on { background:var(--s3); box-shadow:inset 3px 0 0 var(--acc); }
+  .titem .r1 { display:flex; align-items:center; gap:6px; } .titem .r1 b { color:var(--acc); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:150px; }
+  .titem .r1 .x { margin-left:auto; background:none; border:0; color:var(--faint); padding:0 2px; } .titem .r1 .x:hover { color:var(--down); }
+  .titem .r2 { display:flex; gap:8px; font-size:11px; color:var(--faint); margin-top:2px; }
+  .titem .rm { font-size:12px; color:var(--mute); margin-top:3px; cursor:text; } .titem .rm:empty::before { content:"+ 备注"; color:var(--faint); }
+  .tag { font-size:10px; padding:0 5px; border-radius:4px; background:var(--s3); color:var(--mute); }
+  .feedwrap { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .fhead { padding:10px 14px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .fhead h2 { margin:0; font-size:14px; }
+  .sw { display:flex; align-items:center; gap:6px; color:var(--mute); font-size:12px; cursor:pointer; }
+  .feed { flex:1; overflow:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th { position:sticky; top:0; background:var(--s1); color:var(--faint); font-weight:400; font-size:12px; text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); }
+  td { padding:7px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  tr.new td { animation:flash 2.5s ease-out; } @keyframes flash { from { background:rgba(240,185,11,.18); } to { background:transparent; } }
+  .act { font-weight:700; padding:1px 7px; border-radius:5px; font-size:12px; }
+  .act.建仓, .act.加仓, .act.买入 { color:var(--up); background:var(--up-bg); } .act.减仓, .act.清仓, .act.卖出 { color:var(--down); background:var(--down-bg); }
+  .act.清仓 { outline:1px solid var(--down); }
+  .cal { display:flex; align-items:center; gap:6px; margin-top:2px; font-size:11px; color:var(--faint); }
+  .cal .cp { background:none; border:1px solid var(--line2); border-radius:5px; color:var(--mute); font-size:11px; padding:0 6px; } .cal .cp:hover { color:var(--text); }
+  .cal .go { color:var(--acc); text-decoration:none; font-weight:600; } .cal .go:hover { text-decoration:underline; }
+  .who { color:var(--acc); cursor:pointer; } .tok { cursor:pointer; font-weight:600; } .tok:hover, .who:hover { text-decoration:underline; }
+  .pf { font-size:11px; color:var(--faint); }
+  .more { padding:14px; text-align:center; } .more button { background:var(--s2); border:1px solid var(--line2); border-radius:8px; padding:6px 16px; color:var(--mute); }
+  .empty { padding:40px; text-align:center; color:var(--faint); }
+  .note { font-size:12px; color:var(--mute); }
+  .toasts { position:fixed; right:14px; bottom:14px; display:flex; flex-direction:column; gap:8px; z-index:99; }
+  .toast { background:var(--s3); border:1px solid var(--line2); border-radius:9px; padding:9px 13px; max-width:380px; font-size:12px; } .toast.err { border-color:var(--down); } .toast.ok { border-color:var(--up); }
+  .toast.click { cursor:pointer; } .toast.click:hover { border-color:var(--acc); } .toast.click::after { content:"  点击打开 →"; color:var(--acc); font-weight:600; }
+  @media (max-width:820px) { body { overflow:auto; } .main { flex-direction:column; } .side { flex:none; border-right:0; } }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand"><svg class="tmlogo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="tmg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F8D33A"/><stop offset="1" stop-color="#E8890C"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#tmg)"/><path d="M5 10.5H14.5M9.75 10.5V23M18.5 23V10.5H23.25A3.5 3.5 0 0 1 23.25 17.5H18.5" fill="none" stroke="#1a1300" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>TIGER POWER</span><small class="tmsub">内盘终端</small></div>
+  <div class="nav"><a href="/">交易</a><a href="/scan">扫链</a><a href="/track" class="on">追踪</a></div>
+  <div class="setwrap"><button class="setbtn" id="setBtn" title="钱包、转账、设置、授权">⚙ 钱包 / 设置</button><div class="setmenu" id="setMenu" hidden><a href="/?go=secWallets" class="setitem"><span class="mi">👛</span><span><b>钱包与持仓</b><small>余额、登录状态、全部持仓和盈亏</small></span></a><a href="/?go=sendBox" class="setitem"><span class="mi">💸</span><span><b>转账</b><small>BNB / 代币转到任意地址</small></span></a><a href="/?go=secSettings" class="setitem"><span class="mi">⚙</span><span><b>设置</b><small>单笔上限、发射后自动转出、自动领取</small></span></a><a href="/?go=secQuotes" class="setitem"><span class="mi">🪙</span><span><b>底池币余额</b><small>内盘卖出后剩下的,一键换回 BNB</small></span></a><a href="/?go=secApprovals" class="setitem"><span class="mi">🔐</span><span><b>授权管理</b><small>查看 / 撤销代币授权</small></span></a></div></div>
+  <a class="tipbtn" href="/?tip=1" title="请作者喝杯咖啡">☕ 打赏作者</a>
+  <a class="xlink" href="https://x.com/tiger_web3" target="_blank" rel="noopener" title="作者推特 @tiger_web3"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg><span>@tiger_web3</span></a>
+  <span class="livetag" id="liveTag"><span class="dot" id="liveDot"></span>实时</span>
+</div>
+<div class="main">
+  <aside class="side">
+    <div class="add">
+      <input id="aIn" placeholder="地址 0x… 或 .ai / .bnb 名字" spellcheck="false" autocomplete="off">
+      <div class="row"><input id="aRm" placeholder="备注(可选)" maxlength="80"><select id="aGrp" style="flex:0 0 96px"></select></div>
+      <div class="row"><button class="btn" id="aGo" style="flex:1">添加关注</button></div>
+      <div class="faint" style="font-size:11px">新加的地址会自动补出最近 24 小时的内盘买卖</div>
+    </div>
+    <div class="groups" id="groups"></div>
+    <div class="tlist" id="tlist"></div>
+  </aside>
+  <section class="feedwrap">
+    <div class="fhead">
+      <h2 id="fTitle">全部动态</h2>
+      <span class="note" id="fNote"></span>
+      <label class="sw" style="margin-left:auto"><input type="checkbox" id="sndOn"> 提示音</label>
+    </div>
+    <div class="feed" id="feed"></div>
+  </section>
+</div>
+<div class="toasts" id="toasts"></div>
+
+<script>
+const TOKEN_INIT = "__PANEL_TOKEN__";
+let TOKEN = TOKEN_INIT;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const short = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "";
+function num(x) {
+  if (x === null || x === undefined || !isFinite(x)) return "—";
+  const a = Math.abs(x);
+  return a >= 1e9 ? (x / 1e9).toFixed(2) + "B" : a >= 1e6 ? (x / 1e6).toFixed(2) + "M" : a >= 1e3 ? (x / 1e3).toFixed(1) + "K" : a >= 1 ? x.toFixed(2) : x.toPrecision(3);
+}
+function age(ts) {
+  if (!ts) return "";
+  const s = Date.now() / 1000 - ts;
+  return s < 60 ? Math.max(0, Math.round(s)) + "秒前" : s < 3600 ? Math.round(s / 60) + "分前" : s < 86400 ? (s / 3600).toFixed(1) + "时前" : (s / 86400).toFixed(1) + "天前";
+}
+const fullTime = (ts) => new Date(ts * 1000).toLocaleString();
+const PF = { four: "four", gangv1: "Gang V1", gangv2: "Gang V2", idagent: "Flap 内盘" };
+async function refreshToken() {
+  const html = await fetch(location.pathname, { cache: "no-store" }).then((r) => r.text());
+  const m = html.match(/const TOKEN_INIT = "([0-9a-f]{48})"/);
+  if (m) TOKEN = m[1];
+  return !!m;
+}
+async function post(path, body = {}) {
+  const send = () => fetch(path, { method: "POST", headers: { "content-type": "application/json", "x-panel-token": TOKEN }, body: JSON.stringify(body) });
+  let r = await send();
+  if (r.status === 403 && /令牌/.test(await r.clone().text()) && (await refreshToken())) r = await send();
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || r.status);
+  return d;
+}
+// ca:带上代币地址时这条提示可以点,点了打开这个币(交易页)
+function toast(msg, kind = "", ca = null) {
+  const t = document.createElement("div"); t.className = "toast " + kind + (ca ? " click" : ""); t.textContent = msg;
+  if (ca) { t.title = "点击打开 " + ca; t.onclick = () => { t.remove(); location.href = "/?ca=" + ca; }; }
+  $("toasts").appendChild(t); setTimeout(() => t.remove(), kind === "err" ? 9000 : ca ? 8000 : 5000);
+}
+function beep() {
+  try { const ac = new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 660; g.gain.setValueAtTime(0.12, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.3); o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.31); } catch {}
+}
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+
+let L = { targets: [], groups: ["默认"] }, grp = store.get("trkGrp", "all"), sel = null, items = [], more = false, loading = false;
+$("sndOn").checked = store.get("trkSnd", "1") === "1";
+$("sndOn").onchange = () => store.set("trkSnd", $("sndOn").checked ? "1" : "0");
+
+async function loadList() {
+  try { L = await post("/api/track"); } catch (e) { toast("读关注列表失败:" + e.message, "err"); return; }
+  if (grp !== "all" && !L.groups.includes(grp)) grp = "all";
+  if (sel && !L.targets.some((t) => t.address === sel)) sel = null;
+  renderSide(); renderHead();
+}
+function renderSide() {
+  $("aGrp").innerHTML = L.groups.map((g) => `<option>${esc(g)}</option>`).join("");
+  if (grp !== "all") $("aGrp").value = grp;
+  $("groups").innerHTML = [["all", `全部 ${L.targets.length}`], ...L.groups.map((g) => [g, `${g} ${L.targets.filter((t) => t.group === g).length}`])]
+    .map(([k, n]) => `<button data-g="${esc(k)}" class="${k === grp ? "on" : ""}">${esc(n)}</button>`).join("") +
+    `<button data-act="addg" title="新建分组">+</button>${grp !== "all" && grp !== "默认" ? '<button data-act="delg" title="删除分组(里面的地址移到默认)">删组</button>' : ""}`;
+  $("groups").querySelectorAll("[data-g]").forEach((b) => (b.onclick = () => { grp = b.dataset.g; store.set("trkGrp", grp); sel = null; renderSide(); renderHead(); loadFeed(); }));
+  $("groups").querySelector('[data-act="addg"]').onclick = async () => { const n = prompt("新分组名"); if (n?.trim()) { try { await post("/api/track/group", { op: "add", name: n.trim() }); } catch (e) { toast(e.message, "err"); } } };
+  $("groups").querySelector('[data-act="delg"]')?.addEventListener("click", async () => { if (confirm(`删除分组「${grp}」?里面的地址会移到「默认」`)) { try { await post("/api/track/group", { op: "delete", name: grp }); grp = "all"; } catch (e) { toast(e.message, "err"); } } });
+  const list = L.targets.filter((t) => grp === "all" || t.group === grp);
+  const last = {}; for (const e of items) if (!last[e.target]) last[e.target] = e.ts;
+  $("tlist").innerHTML = list.length ? list.map((t) => `<div class="titem ${sel === t.address ? "on" : ""}" data-a="${t.address}">
+      <div class="r1"><b title="${esc(t.handle ?? "")}">${esc(t.name || short(t.address))}</b><span class="tag">${esc(t.group)}</span>${!t.backfilledAt ? '<span class="tag" title="正在补最近 24 小时">回补中…</span>' : t.backfillPartial ? '<span class="tag" title="没配自己的节点,公共节点只查到最近约 1 小时">只补了 1 小时</span>' : ""}
+        <button class="x" data-del="${t.address}" title="取消关注">✕</button></div>
+      <div class="r2"><span class="mono">${short(t.address)}</span>${last[t.address] ? `<span>最近 ${age(last[t.address])}</span>` : ""}</div>
+      <div class="rm" data-rm="${t.address}" title="点击编辑备注">${esc(t.remark)}</div>
+    </div>`).join("") : '<div class="empty">还没有关注的地址<br>在上面填地址或 .ai 名字</div>';
+  $("tlist").querySelectorAll(".titem").forEach((el) => (el.onclick = (e) => {
+    if (e.target.closest("[data-del],[data-rm]")) return;
+    sel = sel === el.dataset.a ? null : el.dataset.a; renderSide(); renderHead(); loadFeed();
+  }));
+  $("tlist").querySelectorAll("[data-del]").forEach((b) => (b.onclick = async () => {
+    const t = L.targets.find((x) => x.address === b.dataset.del);
+    if (!confirm(`取消关注 ${t?.name || b.dataset.del}?(已记下的历史动态保留)`)) return;
+    try { await post("/api/track/remove", { address: b.dataset.del }); } catch (e) { toast(e.message, "err"); }
+  }));
+  $("tlist").querySelectorAll("[data-rm]").forEach((el) => (el.onclick = async () => {
+    const t = L.targets.find((x) => x.address === el.dataset.rm);
+    const v = prompt(`给 ${t?.name || short(t?.address)} 写备注`, t?.remark ?? "");
+    if (v === null) return;
+    try { await post("/api/track/update", { address: el.dataset.rm, remark: v }); } catch (e) { toast(e.message, "err"); }
+  }));
+}
+function renderHead() {
+  const t = sel ? L.targets.find((x) => x.address === sel) : null;
+  $("fTitle").innerHTML = t ? `${esc(t.name || short(t.address))} <a class="faint mono" style="font-size:12px;font-weight:400" href="https://bscscan.com/address/${t.address}" target="_blank" rel="noopener">${t.address} ↗</a>` : grp === "all" ? "全部动态" : `分组「${esc(grp)}」的动态`;
+  const st = L.status;
+  $("fNote").textContent = (st?.running ? "正在补历史… " : "") + (st?.last?.error ? "上次回补失败:" + st.last.error + " " : "") + (L.hasPrivate === false ? "没配自己的节点:历史只能补最近约 1 小时(.env 配 BSC_LOG_RPC 可补 24 小时)" : "");
+}
+function row(e, isNew) {
+  const plat = PF[e.platform] ?? e.platform;
+  return `<tr class="${isNew ? "new" : ""}">
+    <td class="faint" title="${esc(fullTime(e.ts))}">${age(e.ts)}${e.backfill ? ' <span class="tag" title="添加关注时从链上补的历史">补</span>' : ""}</td>
+    <td><span class="who" data-who="${e.target}">${esc(e.targetName || short(e.target))}</span></td>
+    <td><span class="act ${esc(e.action)}">${esc(e.action)}</span>${e.pct ? ` <span class="faint">${e.pct.toFixed(0)}%</span>` : ""}</td>
+    <td><span class="tok" data-ca="${e.ca}" title="在交易页打开">${esc(e.symbol)}</span> <span class="pf">${esc(plat)}</span>
+      <div class="cal"><span class="mono" title="${e.ca}">${short(e.ca)}</span><button class="cp" data-copy="${e.ca}" title="复制 CA">复制</button><a class="go" href="/?ca=${e.ca}" target="_blank" rel="noopener" title="在交易页打开这个币">去交易 →</a></div></td>
+    <td class="num ${e.side === "buy" ? "up" : "down"}">${num(e.quoteAmt)} <span class="faint">${esc(e.quote)}</span></td>
+    <td class="num mute">${e.usd ? "$" + num(e.usd) : ""}</td>
+    <td class="num faint">${num(e.tokens)} 个</td>
+    <td><a class="faint" href="https://bscscan.com/tx/${e.tx}" target="_blank" rel="noopener">交易 ↗</a></td>
+  </tr>`;
+}
+function renderFeed(newIds = new Set()) {
+  if (!items.length) { $("feed").innerHTML = `<div class="empty">${loading ? "加载中…" : L.targets.length ? "还没有动态(这些地址在内盘有买卖就会出现在这里)" : "先在左边添加要关注的地址"}</div>`; return; }
+  $("feed").innerHTML = `<table><thead><tr><th>时间</th><th>谁</th><th>动作</th><th>代币</th><th>金额</th><th>美元</th><th>数量</th><th></th></tr></thead><tbody>${items.map((e) => row(e, newIds.has(e.id))).join("")}</tbody></table>` +
+    (more ? '<div class="more"><button id="moreBtn">加载更早的</button></div>' : "");
+  $("feed").querySelectorAll("[data-ca]").forEach((x) => (x.onclick = () => window.open("/?ca=" + x.dataset.ca, "_blank")));
+  $("feed").querySelectorAll("[data-copy]").forEach((b) => (b.onclick = () => navigator.clipboard?.writeText(b.dataset.copy).then(() => { b.textContent = "已复制"; setTimeout(() => (b.textContent = "复制"), 900); }, () => toast("复制失败", "err"))));
+  $("feed").querySelectorAll("[data-who]").forEach((x) => (x.onclick = () => { sel = x.dataset.who; grp = "all"; renderSide(); renderHead(); loadFeed(); }));
+  $("moreBtn")?.addEventListener("click", () => loadFeed(true));
+}
+async function loadFeed(older = false) {
+  loading = true; if (!older) { items = []; renderFeed(); }
+  try {
+    const d = await post("/api/track/feed", { limit: 150, target: sel, group: sel ? null : grp, before: older && items.length ? items[items.length - 1].ts : undefined });
+    items = older ? items.concat(d.items) : d.items; more = d.more;
+  } catch (e) { toast("读动态失败:" + e.message, "err"); }
+  loading = false; renderFeed(); renderSide();
+}
+$("aGo").onclick = async () => {
+  const input = $("aIn").value.trim(); if (!input) return $("aIn").focus();
+  $("aGo").disabled = true; $("aGo").textContent = "添加中…";
+  try {
+    const t = await post("/api/track/add", { input, remark: $("aRm").value.trim(), group: $("aGrp").value });
+    toast(`已关注 ${t.name || short(t.address)},正在补最近 24 小时`, "ok");
+    $("aIn").value = ""; $("aRm").value = "";
+  } catch (e) { toast("添加失败:" + e.message, "err"); }
+  $("aGo").disabled = false; $("aGo").textContent = "添加关注";
+};
+$("aIn").onkeydown = (e) => { if (e.key === "Enter") $("aGo").click(); };
+
+// 实时:关注的地址有新买卖就插到最上面
+let es = null, listT = null;
+function startStream() {
+  try { es?.close(); } catch {}
+  es = new EventSource("/api/stream?t=" + TOKEN);
+  es.onopen = () => { $("liveDot").className = "dot on"; };
+  es.onerror = async () => { $("liveDot").className = "dot off"; if (es.readyState === 2 && (await refreshToken())) setTimeout(startStream, 1000); };
+  es.onmessage = (m) => {
+    let ev; try { ev = JSON.parse(m.data); } catch { return; }
+    if (ev.type === "track-list") { clearTimeout(listT); listT = setTimeout(async () => { const wasRunning = L.status?.running; await loadList(); if (wasRunning && !L.status?.running) loadFeed(); }, 300); return; }
+    if (ev.type !== "track") return;
+    const t = L.targets.find((x) => x.address === ev.target);
+    if ($("sndOn").checked) beep();
+    toast(`👁 ${ev.targetName || short(ev.target)} ${ev.action} ${ev.symbol} ${num(ev.quoteAmt)} ${ev.quote}`, ev.side === "buy" ? "ok" : "err", ev.ca);
+    if (sel ? ev.target !== sel : grp !== "all" && t?.group !== grp) return;
+    if (items.some((x) => x.id === ev.id)) return;
+    items.unshift(ev); renderFeed(new Set([ev.id])); renderSide();
+  };
+}
+setInterval(() => { if (!document.hidden && items.length) renderFeed(); }, 30_000);   // 刷新「几分前」
+loadList().then(() => loadFeed());
+startStream();
+</script>
+<script>
+document.getElementById("setBtn").onclick = (e) => { e.stopPropagation(); const m = document.getElementById("setMenu"); m.hidden = !m.hidden; };
+document.addEventListener("click", (e) => { if (!e.target.closest(".setwrap")) document.getElementById("setMenu").hidden = true; });
+</script>
+</body>
+</html>

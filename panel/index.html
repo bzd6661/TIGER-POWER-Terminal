@@ -1,0 +1,1971 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TIGER POWER · 内盘交易终端</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  :root {
+    --bg:#0a0c0f; --s1:#101318; --s2:#151920; --s3:#1b2029; --line:#1e232c; --line2:#2a313d;
+    --text:#e7eaf0; --mute:#8d96a7; --faint:#5b6372;
+    --up:#16c784; --up-bg:rgba(22,199,132,.12); --down:#ea3943; --down-bg:rgba(234,57,67,.12);
+    --acc:#f0b90b; --blue:#3b82f6; --blue-bg:rgba(59,130,246,.14);
+    --r:10px;
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }   /* 带 display 的元素(比如开关)也要能被 hidden 藏起来 */
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:13px/1.45 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  body { display:flex; flex-direction:column; overflow:hidden; }
+  button, input { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  .mono { font-family:"JetBrains Mono", Consolas, "SF Mono", monospace; }
+  .num { font-variant-numeric:tabular-nums; }
+  .mute { color:var(--mute); } .faint { color:var(--faint); }
+  .up { color:var(--up); } .down { color:var(--down); }
+  ::-webkit-scrollbar { width:6px; height:6px; } ::-webkit-scrollbar-thumb { background:#2a313d; border-radius:3px; } ::-webkit-scrollbar-track { background:transparent; }
+
+  /* ---------- 顶栏 ---------- */
+  .top { flex:0 0 52px; display:flex; align-items:center; gap:16px; padding:0 16px; border-bottom:1px solid var(--line); background:var(--s1); }
+  .brand { display:flex; align-items:center; gap:8px; font-weight:700; font-size:15px; white-space:nowrap; }
+  .xlink { display:inline-flex; align-items:center; gap:6px; flex:none; color:var(--text); background:var(--s3); text-decoration:none; font-size:12px; font-weight:600; padding:5px 10px; border:1px solid var(--line2); border-radius:999px; }
+  .xlink svg { width:13px; height:13px; } .xlink:hover { border-color:var(--acc); color:var(--acc); }
+  @media (max-width:1100px) { .xlink span { display:none; } }
+  .brand .tmlogo { width:24px; height:24px; flex:none; display:block; filter:drop-shadow(0 1px 4px rgba(240,185,11,.25)); }
+  .brand > span { font-weight:800; letter-spacing:.5px; } .brand .tmsub { font-size:11px; font-weight:500; color:var(--mute); margin-left:-2px; }
+  @media (max-width:820px) { .brand .tmsub { display:none; } }
+  .nav { display:flex; gap:4px; }
+  .nav a { color:var(--mute); text-decoration:none; white-space:nowrap; padding:6px 10px; border-radius:8px; } .nav a.on, .nav a:hover { color:var(--text); background:var(--s3); }
+  .search { flex:1; max-width:520px; display:flex; align-items:center; gap:8px; background:var(--s2); border:1px solid var(--line); border-radius:9px; padding:0 10px; height:34px; }
+  .search:focus-within { border-color:var(--line2); }
+  .searchwrap { position:relative; flex:1; max-width:520px; display:flex; } .searchwrap .search { max-width:none; }
+  .clipchip { flex:none; display:flex; align-items:center; gap:8px; height:34px; padding:0 10px; background:var(--s2); border:1px solid var(--line); border-radius:9px; cursor:pointer; font-size:13px; white-space:nowrap; max-width:300px; }
+  .clipchip:hover { border-color:var(--acc); } .clipchip.on { border-color:var(--line2); background:var(--s3); }
+  .clipchip.ask { color:var(--mute); font-size:12px; border-style:dashed; }
+  .clipchip .logo { width:22px; height:22px; border-radius:6px; font-size:11px; }
+  .clipchip b { overflow:hidden; text-overflow:ellipsis; max-width:120px; }
+  .clipchip .tag { font-size:11px; padding:1px 6px; border-radius:5px; background:var(--s3); color:var(--mute); } .clipchip .tag.in { color:var(--up); }
+  .clipchip .x { color:var(--mute); font-size:12px; padding-left:2px; } .clipchip .x:hover { color:var(--text); }
+  .search input { flex:1; min-width:0; background:none; border:0; outline:0; font-size:13px; }
+  .search kbd { font-size:11px; color:var(--faint); border:1px solid var(--line2); border-radius:4px; padding:0 5px; }
+  .wallets { margin-left:auto; display:flex; gap:8px; }
+  .wchip { display:flex; align-items:center; gap:7px; height:32px; padding:0 11px; background:var(--s2); border:1px solid var(--line); border-radius:9px; white-space:nowrap; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--faint); flex:none; } .dot.on { background:var(--up); box-shadow:0 0 6px var(--up); } .dot.off { background:var(--down); }
+
+  /* ---------- 三栏 ---------- */
+  .main { flex:1; min-height:0; display:grid; grid-template-columns:268px 268px minmax(0,1fr) 336px; }
+  .col { min-height:0; overflow:auto; }
+  .side { border-right:1px solid var(--line); background:var(--s1); display:flex; flex-direction:column; }
+  .center { display:flex; flex-direction:column; }
+  .trade { border-left:1px solid var(--line); background:var(--s1); }
+  body.ms-off .main { grid-template-columns:268px minmax(0,1fr) 336px; } body.ms-off .mscan { display:none !important; }
+  @media (max-width:1440px) { #msShow { display:none !important; } }
+  @media (max-width:1440px) { .main { grid-template-columns:268px minmax(0,1fr) 336px; } .mscan { display:none !important; } }
+  @media (max-width:1180px) { .main { grid-template-columns:minmax(0,1fr) 336px; } .side { display:none; } }
+  @media (max-width:820px) { body { overflow:auto; } .main { display:block; } .col { overflow:visible; } .trade { border-left:0; border-top:1px solid var(--line); } .wallets { display:none; } }
+
+  .sec { padding:12px 14px; }
+  .mscan .sec { display:flex; flex-direction:column; min-height:0; flex:1; }
+  .mscan .pf { margin-bottom:6px; } .mscan .pf button i { font-style:normal; color:var(--faint); margin-left:3px; }
+  .mslist { flex:1; overflow:auto; display:flex; flex-direction:column; gap:2px; margin:0 -4px; }
+  .msrow { display:flex; align-items:center; gap:8px; padding:6px 6px; border-radius:8px; cursor:pointer; }
+  .msrow:hover { background:var(--s2); } .msrow.on { background:var(--s3); box-shadow:inset 2px 0 0 var(--acc); }
+  .msrow .logo { width:28px; height:28px; }
+  .msrow .nm { flex:1; min-width:0; display:flex; flex-direction:column; } .msrow .nm b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
+  .msrow .nm span { font-size:11px; color:var(--faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .msrow .rt { display:flex; flex-direction:column; align-items:flex-end; gap:3px; font-size:12px; }
+  .msbar { display:block; width:46px; height:4px; background:var(--s3); border-radius:2px; overflow:hidden; } .msbar i { display:block; height:100%; background:linear-gradient(90deg,var(--up),var(--acc)); }
+  .sechead { display:flex; align-items:center; justify-content:space-between; color:var(--mute); font-size:12px; margin-bottom:8px; }
+  .icbtn { background:none; border:0; color:var(--faint); padding:2px 4px; border-radius:5px; } .icbtn:hover { color:var(--text); background:var(--s3); }
+
+  /* 侧栏持仓 */
+  .hlist { display:flex; flex-direction:column; gap:2px; }
+  .hrow { display:flex; align-items:center; gap:9px; padding:7px 8px; border-radius:8px; cursor:pointer; }
+  .hrow:hover { background:var(--s2); } .hrow.sel { background:var(--blue-bg); }
+  .logo { position:relative; flex:none; width:30px; height:30px; border-radius:8px; overflow:hidden; background:var(--s3); display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--mute); }
+  .logo img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .hrow .nm { flex:1; min-width:0; } .hrow .nm b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hrow .nm span { font-size:11px; color:var(--faint); }
+  .hrow .rt { text-align:right; font-size:12px; white-space:nowrap; }
+  .pf { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px; }
+  .pf button { background:var(--s2); border:1px solid var(--line); border-radius:7px; padding:3px 8px; font-size:12px; color:var(--mute); }
+  .pf button:hover { color:var(--text); } .pf button.on { color:var(--text); background:var(--s3); border-color:var(--line2); }
+  .pf button i { font-style:normal; color:var(--faint); margin-left:3px; }
+  .recent { display:flex; flex-wrap:wrap; gap:6px; }
+  .recent button { background:var(--s2); border:1px solid var(--line); border-radius:7px; padding:3px 8px; font-size:12px; color:var(--mute); } .recent button:hover { color:var(--text); }
+  .wstat { margin-top:auto; border-top:1px solid var(--line); }
+  .wline { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--mute); padding:2px 0; }
+  .wline b { color:var(--text); font-weight:500; } .wline .warn { color:var(--acc); }
+
+  /* 中间:代币头 */
+  .thead { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line); }
+  .thead .logo { width:42px; height:42px; border-radius:11px; font-size:17px; }
+  .tsym { font-size:18px; font-weight:700; } .tname { color:var(--mute); margin-left:10px; font-size:13px; } .tname b { color:var(--text, #e6e6e6); font-weight:600; }
+  .badges { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:3px; }
+  .bdg { font-size:11px; padding:1px 7px; border-radius:5px; background:var(--s3); color:var(--mute); }
+  .bdg.inner { color:var(--up); background:var(--up-bg); } .bdg.outer { color:var(--acc); background:rgba(240,185,11,.12); } .bdg.bad { color:var(--down); background:var(--down-bg); }
+  .ca { font-size:12px; color:var(--faint); cursor:pointer; } .ca:hover { color:var(--text); }
+  .links { margin-left:auto; display:flex; gap:6px; }
+  .links a { font-size:12px; color:var(--mute); text-decoration:none; padding:4px 9px; border:1px solid var(--line); border-radius:7px; } .links a:hover { color:var(--text); border-color:var(--line2); }
+  .metrics { display:flex; flex-wrap:wrap; gap:0; border-bottom:1px solid var(--line); }
+  .m { padding:9px 16px; border-right:1px solid var(--line); min-width:110px; }
+  .m .k { font-size:11px; color:var(--faint); } .m .v { font-size:14px; font-weight:600; white-space:nowrap; }
+  .m.prog { flex:1; min-width:200px; }
+  .bar { height:5px; background:var(--s3); border-radius:3px; overflow:hidden; margin-top:6px; }
+  .bar i { display:block; height:100%; background:linear-gradient(90deg,var(--up),var(--acc)); }
+  .chart { flex:0 0 auto; height:clamp(340px, 50vh, 600px); border-bottom:1px solid var(--line); position:relative; background:#0d0f13; display:flex; flex-direction:column; }
+  .ctool { display:flex; align-items:center; gap:10px; padding:6px 10px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .cseg { display:inline-flex; gap:2px; background:var(--s2); border:1px solid var(--line); border-radius:7px; padding:2px; }
+  .cseg button { background:none; border:0; color:var(--mute); padding:2px 8px; border-radius:5px; font-size:12px; }
+  .cseg button.on { background:var(--s3); color:var(--text); }
+  .cinfo { font-size:11px; }
+  .cbody { flex:1; min-height:0; position:relative; }
+  /* GMGN 图表底栏正中的「Powered by GMGN」用同色块盖住(两边的周期按钮、时间、log 等照常能点);右上角保留「K 线:GMGN」署名链接 */
+  .gmgncover { position:absolute; left:50%; bottom:1px; transform:translateX(-50%); width:230px; height:32px; background:#121316; pointer-events:auto; }
+  .gmgncredit { position:absolute; top:6px; right:70px; font-size:11px; color:var(--faint); text-decoration:none; background:rgba(13,15,19,.7); padding:1px 6px; border-radius:5px; } .gmgncredit:hover { color:var(--acc); }
+  a.trd { cursor:pointer; color:var(--mute); text-decoration:none; } a.trd:hover { color:var(--acc); }
+  .drawer { position:fixed; top:0; right:0; bottom:0; width:min(440px, 100vw); background:var(--s1); border-left:1px solid var(--line2); z-index:55; box-shadow:-12px 0 40px rgba(0,0,0,.5); display:flex; flex-direction:column; }
+  .drawer .dt { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid var(--line); color:var(--mute); font-size:12px; }
+  .drawer .db { padding:14px; overflow:auto; flex:1; }
+  .drawer .dh { display:flex; justify-content:space-between; gap:10px; margin-bottom:8px; } .drawer .dh a { font-size:12px; text-decoration:none; }
+  .drawer .dbig { font-size:22px; font-weight:700; margin:6px 0 10px; } .drawer .dbig small { font-size:12px; font-weight:500; }
+  .drawer td, .drawer th { padding:5px 8px; }
+  .chart iframe { width:100%; height:100%; border:0; display:block; }
+  .chart .ph { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--faint); text-align:center; padding:20px; }
+  .tabs { display:flex; gap:2px; padding:0 12px; border-bottom:1px solid var(--line); }
+  .tabs button { background:none; border:0; color:var(--mute); padding:10px 10px; border-bottom:2px solid transparent; } .tabs button.on { color:var(--text); border-bottom-color:var(--acc); }
+  .tabbody { flex:1; min-height:200px; }
+  table { width:100%; border-collapse:collapse; }
+  th { position:sticky; top:0; background:var(--bg); text-align:left; font-weight:500; font-size:11px; color:var(--faint); padding:7px 12px; border-bottom:1px solid var(--line); }
+  td { padding:6px 12px; border-bottom:1px solid #15191f; white-space:nowrap; }
+  tr.mine td { background:rgba(240,185,11,.06); }
+  .me { font-size:11px; color:var(--acc); border:1px solid rgba(240,185,11,.4); border-radius:4px; padding:0 4px; margin-left:4px; }
+  .empty { color:var(--faint); text-align:center; padding:60px 20px; }
+  .poscards { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; padding:12px; }
+  .pcard { background:var(--s1); border:1px solid var(--line); border-radius:var(--r); padding:12px; }
+  .pcard .p { font-size:22px; font-weight:700; margin:4px 0 6px; }
+  .kv { display:flex; justify-content:space-between; gap:10px; color:var(--mute); font-size:12px; padding:2px 0; } .kv b { color:var(--text); font-weight:500; }
+
+  /* 右:交易 */
+  .seg { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:3px; background:var(--s2); border:1px solid var(--line); border-radius:9px; padding:3px; }
+  .seg button { background:none; border:0; border-radius:7px; padding:6px 0; color:var(--mute); }
+  .seg button.on { background:var(--s3); color:var(--text); }
+  .side-tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:12px; }
+  .side-tabs button { border:1px solid var(--line); background:var(--s2); border-radius:9px; padding:9px 0; font-weight:600; color:var(--mute); }
+  .side-tabs .b.on { background:var(--up-bg); border-color:rgba(22,199,132,.5); color:var(--up); }
+  .side-tabs .s.on { background:var(--down-bg); border-color:rgba(234,57,67,.5); color:var(--down); }
+  .grp { margin-top:14px; } .grp .lbl { display:flex; justify-content:space-between; font-size:12px; color:var(--mute); margin-bottom:7px; }
+  .qgrid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .qgrid.two { grid-template-columns:1fr 1fr; }
+  .q { border:1px solid var(--line); background:var(--s2); border-radius:9px; padding:10px 4px; font-weight:600; font-variant-numeric:tabular-nums; transition:background .12s, border-color .12s; }
+  .q small { display:block; font-weight:400; font-size:11px; color:var(--faint); margin-top:1px; }
+  .buyq .q:hover:not(:disabled) { border-color:rgba(22,199,132,.6); background:var(--up-bg); color:var(--up); }
+  .sellq .q:hover:not(:disabled) { border-color:rgba(234,57,67,.6); background:var(--down-bg); color:var(--down); }
+  .q:disabled { opacity:.35; cursor:not-allowed; }
+  .custom { display:flex; gap:6px; margin-top:8px; }
+  .custom .in { flex:1; display:flex; align-items:center; background:var(--s2); border:1px solid var(--line); border-radius:9px; padding:0 10px; }
+  .custom .in:focus-within { border-color:var(--line2); }
+  .custom input { flex:1; min-width:0; background:none; border:0; outline:0; padding:9px 0; font-variant-numeric:tabular-nums; }
+  .custom button { border:0; border-radius:9px; padding:0 16px; font-weight:600; background:var(--up); color:#03140c; }
+  .custom button:disabled { opacity:.35; cursor:not-allowed; }
+  .opts { margin-top:14px; display:flex; flex-direction:column; gap:8px; }
+  .sw { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12px; color:var(--mute); cursor:pointer; }
+  .sw input { display:none; } .sw i { flex:none; width:32px; height:18px; border-radius:9px; background:var(--s3); border:1px solid var(--line2); position:relative; transition:.15s; }
+  .sw i::after { content:""; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:var(--mute); transition:.15s; }
+  .sw input:checked + i { background:var(--blue); border-color:var(--blue); } .sw input:checked + i::after { left:16px; background:#fff; }
+  .hint { font-size:12px; color:var(--faint); margin-top:10px; line-height:1.55; }
+  .confirm { margin-top:12px; border:1px solid rgba(59,130,246,.5); background:var(--blue-bg); border-radius:var(--r); padding:12px; }
+  .confirm .t { font-weight:700; font-size:14px; } .confirm .b { font-size:12px; color:var(--mute); margin:5px 0 10px; white-space:pre-wrap; word-break:break-all; }
+  .confirm .row { display:grid; grid-template-columns:2fr 1fr; gap:6px; }
+  .confirm button { border-radius:8px; padding:8px 0; border:1px solid var(--line2); background:var(--s3); }
+  .confirm .yes { background:var(--blue); border-color:var(--blue); color:#fff; font-weight:600; }
+  .order { margin-top:12px; border:1px solid var(--line); background:var(--s2); border-radius:var(--r); padding:10px 12px; }
+  .order .h { display:flex; justify-content:space-between; align-items:center; font-weight:600; }
+  .chipst { font-size:11px; font-weight:500; padding:1px 8px; border-radius:999px; }
+  .chipst.run { color:var(--blue); background:var(--blue-bg); } .chipst.ok { color:var(--up); background:var(--up-bg); } .chipst.err { color:var(--down); background:var(--down-bg); }
+  .order .lines { font-family:Consolas, monospace; font-size:11px; color:var(--mute); margin-top:6px; max-height:96px; overflow:auto; white-space:pre-wrap; word-break:break-all; }
+  .order .lines .err { color:var(--down); } .order .lines .ok { color:var(--up); }
+  .pos { border-top:1px solid var(--line); }
+  details.log summary { cursor:pointer; color:var(--mute); font-size:12px; list-style:none; } details.log summary::-webkit-details-marker { display:none; }
+  #log { margin-top:8px; background:#07080a; border:1px solid var(--line); border-radius:8px; padding:8px; max-height:260px; overflow:auto; font-family:Consolas, monospace; font-size:11px; white-space:pre-wrap; word-break:break-all; }
+  #log .err { color:var(--down); } #log .ok { color:var(--up); } #log .sep { color:var(--acc); }
+
+  button.wchip.add { color:var(--acc); border-style:dashed; border-color:rgba(240,185,11,.45); } button.wchip.add:hover { background:rgba(240,185,11,.08); }
+  .wline a { color:var(--faint); cursor:pointer; font-size:11px; } .wline a:hover { color:var(--down); }
+  .loginhero { max-width:420px; margin:70px auto; text-align:center; color:var(--mute); padding:0 16px; }
+  .loginhero h2 { color:var(--text); font-size:18px; margin:0 0 8px; }
+  .herosteps { margin-top:26px; text-align:left; background:var(--s1); border:1px solid var(--line); border-radius:10px; padding:12px 14px; font-size:12px; line-height:1.7; }
+  .herosteps b { color:var(--text); } .herosteps ol { margin:6px 0 6px 18px; padding:0; }
+  .herowarn { margin-top:14px; text-align:left; background:var(--down-bg, rgba(234,57,67,.12)); border:1px solid var(--down); border-radius:8px; padding:9px 12px; font-size:12px; color:var(--text); }
+  .herowarn code, .herosteps code { background:var(--s3); padding:1px 5px; border-radius:4px; }
+  .btn-acc { border:0; border-radius:9px; padding:10px 22px; font-weight:700; background:var(--acc); color:#1a1300; margin-top:16px; }
+  .setwrap { position:relative; flex:none; }
+  .setbtn { background:var(--s2); border:1px solid var(--line2); border-radius:999px; padding:6px 12px; font-size:13px; color:var(--text); white-space:nowrap; text-decoration:none; display:inline-block; }
+  .setbtn:hover, .setbtn.on { border-color:var(--acc); }
+  .setmenu { position:absolute; right:0; top:calc(100% + 8px); z-index:70; width:290px; background:var(--s1); border:1px solid var(--line2); border-radius:12px; padding:6px; box-shadow:0 12px 32px rgba(0,0,0,.5); }
+  .setmenu button { display:flex; align-items:center; gap:10px; width:100%; background:none; border:0; border-radius:8px; padding:8px 10px; text-align:left; color:var(--text); }
+  .setmenu button:hover { background:var(--s3); } .setmenu .mi { width:26px; text-align:center; font-size:16px; }
+  .setmenu b { display:block; font-size:13px; } .setmenu small { display:block; font-size:11px; color:var(--faint); }
+  .secflash { animation:secflash 1.6s ease-out; } @keyframes secflash { 0% { box-shadow:0 0 0 2px var(--acc); } 100% { box-shadow:0 0 0 2px transparent; } }
+  @media (max-width:820px) { .setbtn { padding:5px 9px; font-size:12px; } }
+  .tipbtn { flex:none; border:0; border-radius:999px; padding:7px 14px; font-weight:800; font-size:13px; color:#1a1300; background:linear-gradient(135deg,#F8D33A,#E8890C); box-shadow:0 0 0 0 rgba(240,185,11,.55); animation:tippulse 2.6s ease-out infinite; white-space:nowrap; }
+  .tipbtn:hover { filter:brightness(1.08); animation:none; box-shadow:0 0 14px rgba(240,185,11,.55); }
+  @keyframes tippulse { 0% { box-shadow:0 0 0 0 rgba(240,185,11,.55); } 70% { box-shadow:0 0 0 9px rgba(240,185,11,0); } 100% { box-shadow:0 0 0 0 rgba(240,185,11,0); } }
+  @media (max-width:820px) { .tipbtn { padding:6px 10px; font-size:12px; } }
+  .tipbox { max-width:420px; text-align:left; }
+  .tiphead { display:flex; align-items:center; gap:10px; margin-bottom:10px; } .tiphead h3 { margin:0; font-size:16px; } .tiphead .icbtn { margin-left:auto; }
+  .tipcup { font-size:26px; width:42px; height:42px; display:flex; align-items:center; justify-content:center; border-radius:12px; background:linear-gradient(135deg,#F8D33A,#E8890C); }
+  .tipinfo { font-size:12px; color:var(--mute); background:var(--s2); border:1px solid var(--line); border-radius:9px; padding:9px 11px; line-height:1.6; }
+  .tipinfo .kv { display:flex; justify-content:space-between; gap:8px; margin-top:4px; } .tipinfo a { color:var(--acc); font-size:11px; text-decoration:none; overflow:hidden; text-overflow:ellipsis; }
+  .tiprow { display:flex; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap; } .tiprow > label { flex:0 0 30px; color:var(--mute); font-size:12px; }
+  .tiprow .segs { display:flex; gap:4px; flex-wrap:wrap; } .tiprow .segs button { background:var(--s2); border:1px solid var(--line); color:var(--mute); border-radius:7px; padding:4px 10px; font-size:12px; }
+  .tiprow .segs button.on { border-color:var(--acc); color:var(--text); }
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:60; padding:16px; }
+  .modal[hidden] { display:none; }
+  .mbox { width:100%; max-width:360px; background:var(--s1); border:1px solid var(--line2); border-radius:14px; padding:18px; text-align:center; }
+  .mbox h3 { margin:0 0 4px; font-size:16px; }
+  .qr { width:220px; height:220px; margin:14px auto 10px; background:#fff; border-radius:10px; padding:8px; display:flex; align-items:center; justify-content:center; color:#555; }
+  .qr svg { width:100%; height:100%; display:block; }
+  .pair { font-size:12px; color:var(--mute); } .pair b { font-family:Consolas, monospace; font-size:18px; letter-spacing:3px; color:var(--acc); }
+  .mstate { margin:10px 0 4px; font-size:13px; min-height:20px; }
+  .mrow { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+  .mrow a, .mrow button { display:block; text-align:center; text-decoration:none; border-radius:9px; padding:9px 0; border:1px solid var(--line2); background:var(--s3); color:var(--text); font-size:13px; }
+
+  .m .v small { font-size:11px; font-weight:500; margin-left:4px; }
+  .m.mine { background:rgba(240,185,11,.05); }
+  .slipseg { display:grid; grid-template-columns:repeat(6, 1fr) 62px; gap:4px; }
+  .slipseg button { border:1px solid var(--line); background:var(--s2); border-radius:7px; padding:6px 0; font-size:12px; color:var(--mute); }
+  .slipseg button.on { color:var(--text); border-color:var(--acc); background:rgba(240,185,11,.1); }
+  .slipseg input { min-width:0; border:1px solid var(--line); background:var(--s2); border-radius:7px; padding:0 6px; font-size:12px; outline:0; text-align:center; }
+  .slipseg input.on { border-color:var(--acc); }
+  .qrows { margin-top:8px; background:var(--s2); border:1px solid var(--line); border-radius:9px; padding:8px 10px; font-size:12px; }
+  .qrows .kv { padding:1px 0; }
+  .confirm .qrows { background:rgba(0,0,0,.18); border-color:rgba(59,130,246,.3); margin:6px 0 10px; }
+  kbd.k { font:10px Consolas, monospace; color:var(--faint); border:1px solid var(--line2); border-radius:3px; padding:0 3px; margin-left:4px; }
+  .mypos .acct { border:1px solid var(--line); border-radius:9px; padding:9px 10px; margin-bottom:8px; background:var(--s2); }
+  .mypos .big { font-size:17px; font-weight:700; margin:2px 0 4px; }
+  .mypos .btns { display:grid; grid-template-columns:repeat(5, 1fr); gap:4px; margin-top:7px; }
+  .mypos .btns button { border:1px solid var(--line); background:var(--s1); border-radius:7px; padding:5px 0; font-size:12px; color:var(--down); }
+  .mypos .btns button:hover:not(:disabled) { background:var(--down-bg); border-color:rgba(234,57,67,.5); }
+  .mypos .btns button.rb { color:var(--acc); grid-column:span 5; }
+  .mypos .btns button.rb:hover:not(:disabled) { background:rgba(240,185,11,.1); border-color:rgba(240,185,11,.5); }
+  .mypos .btns button:disabled { opacity:.4; cursor:not-allowed; }
+
+  .home { padding:16px; display:flex; flex-direction:column; gap:14px; }
+  .sumrow { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; }
+  .sum { background:var(--s1); border:1px solid var(--line); border-radius:var(--r); padding:12px 14px; }
+  .sum .k { font-size:12px; color:var(--faint); } .sum .v { font-size:20px; font-weight:700; margin-top:2px; } .sum .v small { font-size:12px; font-weight:500; color:var(--mute); margin-left:4px; }
+  .acards { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; }
+  .acard { background:var(--s1); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .acard .h { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .acard .h b { font-size:15px; }
+  .acard .addr { font-size:12px; color:var(--faint); cursor:pointer; margin-top:2px; } .acard .addr:hover { color:var(--text); }
+  .acard .bal { font-size:24px; font-weight:700; margin:10px 0 2px; } .acard .bal small { font-size:13px; color:var(--mute); font-weight:500; margin-left:4px; }
+  .acard .usd { color:var(--mute); font-size:12px; margin-bottom:10px; }
+  .acard .kv { padding:3px 0; }
+  .qbar { height:4px; background:var(--s3); border-radius:2px; overflow:hidden; margin:3px 0 4px; } .qbar i { display:block; height:100%; background:var(--blue); }
+  .qbar.hot i { background:var(--acc); }
+  .acard.add { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; border-style:dashed; color:var(--mute); min-height:180px; cursor:pointer; }
+  .acard.add:hover { border-color:rgba(240,185,11,.5); color:var(--acc); }
+  .acard .out { background:none; border:0; color:var(--faint); font-size:12px; } .acard .out:hover { color:var(--down); }
+  .hcard { background:var(--s1); border:1px solid var(--line); border-radius:12px; overflow-x:auto; }
+  .hcard .t { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid var(--line); color:var(--mute); font-size:12px; }
+  .hcard table tr.go { cursor:pointer; } .hcard table tr.go:hover td { background:var(--s2); }
+  .hcard td, .hcard th { text-align:right; } .hcard td:first-child, .hcard th:first-child { text-align:left; }
+  .hcard .tk { display:flex; align-items:center; gap:8px; } .hcard .tk .logo { width:26px; height:26px; border-radius:7px; font-size:12px; }
+  .brand { cursor:pointer; }
+
+  .atbox { border:1px dashed var(--line2); border-radius:9px; padding:8px 10px; margin-bottom:8px; font-size:12px; }
+  .atbox.on { border-style:solid; border-color:rgba(240,185,11,.45); background:rgba(240,185,11,.05); }
+  .atbox .st { margin-top:4px; color:var(--mute); word-break:break-all; } .atbox .st a { color:var(--acc); }
+
+  .livetag { display:flex; align-items:center; gap:5px; font-size:12px; color:var(--mute); white-space:nowrap; }
+  .feedhead { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--line); font-size:12px; }
+  #tabbody tr.go { cursor:pointer; } #tabbody tr.go:hover td { background:var(--s2); }
+
+  .favbar { flex:0 0 auto; display:flex; align-items:center; gap:12px; padding:5px 16px; border-bottom:1px solid var(--line); background:var(--s1); overflow-x:auto; white-space:nowrap; }
+  .fgroups, .fitems { display:flex; gap:4px; align-items:center; }
+  .fgroups button { background:none; border:1px solid transparent; color:var(--mute); border-radius:6px; padding:2px 8px; font-size:12px; }
+  .fgroups button.on { border-color:var(--line2); color:var(--text); background:var(--s3); }
+  .fgroups input { background:var(--s2); border:1px solid var(--line2); border-radius:6px; padding:2px 6px; font-size:12px; width:110px; outline:0; }
+  .fchip { display:inline-flex; align-items:center; gap:6px; background:var(--s2); border:1px solid var(--line); border-radius:7px; padding:3px 9px 3px 4px; font-size:12px; color:var(--text); }
+  .fchip .logo { width:18px; height:18px; border-radius:5px; font-size:10px; } .fchip b { font-weight:600; }
+  .fchip:hover { border-color:var(--line2); } .fchip.on { border-color:var(--acc); }
+  .htools { display:flex; gap:6px; align-items:center; margin-left:auto; }
+  .htools + .links { margin-left:0; }
+  .hbtn { background:var(--s2); border:1px solid var(--line); color:var(--mute); border-radius:7px; padding:4px 9px; font-size:12px; white-space:nowrap; }
+  .hbtn:hover { color:var(--text); } .hbtn.on { color:var(--acc); border-color:rgba(240,185,11,.45); } .hbtn.bad { color:var(--down); border-color:rgba(234,57,67,.45); }
+  .htools select { background:var(--s2); border:1px solid var(--line); color:var(--text); border-radius:7px; padding:3px 4px; font-size:12px; }
+
+  .xgrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:12px; }
+  .xat { border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 0; margin:8px 0; }
+  .xaddr { width:100%; margin-top:6px; background:var(--s2); border:1px solid var(--line2); border-radius:6px; padding:5px 8px; font:12px Consolas, monospace; color:var(--text); outline:0; }
+  .manifesto { margin:10px 0 2px; padding:10px 12px; background:var(--s2); border:1px solid var(--line); border-radius:10px; }
+  .manifesto .mft { font-size:12px; color:var(--mute); margin-bottom:6px; }
+  .manifesto .mfx { border-left:3px solid var(--acc); padding-left:10px; font-size:14px; line-height:1.55; }
+  .nmeta { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:7px; font-size:12px; }
+  .nconf { display:inline-flex; align-items:center; gap:6px; color:var(--mute); } .nconf i { display:inline-block; width:56px; height:5px; background:var(--s3); border-radius:3px; overflow:hidden; } .nconf b { display:block; height:100%; background:var(--acc); }
+  .duel { padding:10px 12px; } .dbar { display:flex; height:6px; border-radius:3px; overflow:hidden; gap:2px; max-width:420px; } .dbar .b { background:var(--up); } .dbar .s { background:var(--down); }
+  .dsum { font-size:12px; margin:6px 0 10px; }
+  .dcols { display:grid; grid-template-columns:1fr 1fr; gap:12px; } @media (max-width:900px) { .dcols { grid-template-columns:1fr; } }
+  .dh { font-size:13px; font-weight:600; padding:4px 2px 8px; display:flex; justify-content:space-between; }
+  .ncard { padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--s1); margin-bottom:8px; } .ncard.me { border-color:var(--acc); }
+  .ncard .nh { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap:wrap; } .ncard .nh .hd { color:var(--acc); }
+  .ncard .ntx { margin-top:8px; padding-left:10px; border-left:3px solid var(--up); font-size:13px; line-height:1.5; word-break:break-word; }
+  .ncard .ntx.sell { border-left-color:var(--down); } .ncard .ntx.sealed { border-left-style:dashed; color:var(--mute); }
+  .minebdg { font-size:10px; padding:1px 6px; border-radius:5px; background:var(--acc); color:#1a1300; font-weight:700; }
+  .sendf { padding:12px 14px; display:flex; flex-direction:column; gap:8px; max-width:640px; }
+  .sendf .row { display:flex; align-items:center; gap:10px; } .sendf .row.sub { margin-top:-4px; font-size:12px; }
+  .sendf .row > label:first-child { flex:0 0 36px; color:var(--mute); font-size:12px; }
+  .sendf select { flex:1; background:var(--s2); border:1px solid var(--line2); border-radius:6px; padding:5px 8px; color:var(--text); }
+  .sendf .segs { display:flex; gap:4px; flex-wrap:wrap; } .sendf .segs button { background:var(--s2); border:1px solid var(--line); color:var(--mute); border-radius:6px; padding:3px 9px; font-size:12px; white-space:nowrap; }
+  .sendf .segs button.on { border-color:var(--acc); color:var(--text); }
+  .xferbtn { width:100%; margin-top:8px; background:var(--s2); border:1px dashed var(--line2); color:var(--mute); border-radius:8px; padding:6px; font-size:12px; } .xferbtn:hover { color:var(--text); border-color:var(--acc); }
+  .xferbox { margin-top:8px; padding:8px; background:var(--s2); border:1px solid var(--line); border-radius:8px; } .xferbox .xaddr { margin-top:0; }
+  .xfpicks { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; align-items:center; font-size:11px; } .xfpicks button { background:var(--s1); border:1px solid var(--line); color:var(--mute); border-radius:6px; padding:2px 8px; font-size:11px; } .xfpicks button.on { border-color:var(--acc); color:var(--text); }
+  .xferbox .sndlog { margin-top:6px; }
+  .sndlog { margin:0; max-height:180px; overflow:auto; background:var(--s2); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font:11px Consolas, monospace; color:var(--mute); white-space:pre-wrap; word-break:break-all; }
+  .xin { width:80px; background:var(--s2); border:1px solid var(--line2); border-radius:6px; padding:3px 6px; text-align:right; color:var(--text); }
+  .qbp { position:fixed; right:360px; top:200px; z-index:45; width:300px; background:rgba(16,19,24,.92); backdrop-filter:blur(6px); border:1px solid var(--line2); border-radius:12px; padding:10px; box-shadow:0 12px 40px rgba(0,0,0,.5); }
+  .qbh { display:flex; align-items:center; gap:8px; cursor:move; user-select:none; margin-bottom:6px; }
+  .qbh button { background:var(--s2); border:1px solid var(--line); color:var(--mute); border-radius:5px; padding:1px 6px; font-size:11px; }
+  .qbh button.on { color:var(--acc); border-color:rgba(240,185,11,.5); }
+  .qbl { display:flex; justify-content:space-between; font-size:12px; margin:6px 0 4px; }
+  .qbg { display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; }
+  .qb { border:1px solid var(--line); background:var(--s2); border-radius:7px; padding:7px 0; font-weight:600; font-variant-numeric:tabular-nums; }
+  .qb.buy:hover { background:var(--up-bg); border-color:rgba(22,199,132,.6); color:var(--up); }
+  .qb.sell:hover { background:var(--down-bg); border-color:rgba(234,57,67,.6); color:var(--down); }
+  .qbe { width:100%; background:var(--s2); border:1px solid var(--acc); border-radius:7px; padding:6px 4px; text-align:center; color:var(--text); }
+  @media (max-width:820px) { .qbp { right:8px; left:8px !important; width:auto; } }
+
+  /* 提示 */
+  .toasts { position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; z-index:50; }
+  .toast { min-width:240px; max-width:360px; background:var(--s3); border:1px solid var(--line2); border-left:3px solid var(--blue); border-radius:9px; padding:9px 12px; box-shadow:0 8px 28px rgba(0,0,0,.45); animation:tin .18s ease-out; }
+  .toast.click { cursor:pointer; } .toast.click:hover { border-color:var(--acc); } .toast.click::after { content:"  点击打开 →"; color:var(--acc); font-weight:600; }
+  .toast.ok { border-left-color:var(--up); } .toast.err { border-left-color:var(--down); }
+  @keyframes tin { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand" id="brand" title="回到账户总览"><svg class="tmlogo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="tmg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F8D33A"/><stop offset="1" stop-color="#E8890C"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#tmg)"/><path d="M5 10.5H14.5M9.75 10.5V23M18.5 23V10.5H23.25A3.5 3.5 0 0 1 23.25 17.5H18.5" fill="none" stroke="#1a1300" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>TIGER POWER</span><small class="tmsub">内盘终端</small></div>
+  <div class="nav"><a href="/" class="on">交易</a><a href="/scan">扫链</a><a href="/track">追踪</a></div>
+  <span class="livetag"><span class="dot" id="liveDot"></span>实时</span>
+  <div class="clipchip" id="clipChip" hidden></div>
+  <div class="searchwrap"><label class="search"><span class="faint">⌕</span><input id="ca" placeholder="粘贴 CA(在页面任何地方 Ctrl+V 也行)" autocomplete="off" spellcheck="false"><kbd>/</kbd></label></div>
+  <div class="setwrap"><button class="setbtn" id="setBtn" title="钱包、转账、设置、授权">⚙ 钱包 / 设置</button><div class="setmenu" id="setMenu" hidden><button data-go="secWallets"><span class="mi">👛</span><span><b>钱包与持仓</b><small>余额、登录状态、全部持仓和盈亏</small></span></button><button data-go="sendBox"><span class="mi">💸</span><span><b>转账</b><small>BNB / 代币转到任意地址</small></span></button><button data-go="secSettings"><span class="mi">⚙</span><span><b>设置</b><small>单笔上限、发射后自动转出、自动领取</small></span></button><button data-go="secQuotes"><span class="mi">🪙</span><span><b>底池币余额</b><small>内盘卖出后剩下的,一键换回 BNB</small></span></button><button data-go="secApprovals"><span class="mi">🔐</span><span><b>授权管理</b><small>查看 / 撤销代币授权</small></span></button></div></div>
+  <button class="tipbtn" id="tipBtn" title="请作者喝杯咖啡">☕ 打赏作者</button>
+  <div class="wallets" id="wchips"></div>
+  <a class="xlink" href="https://x.com/tiger_web3" target="_blank" rel="noopener" title="作者推特 @tiger_web3"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg><span>@tiger_web3</span></a>
+</div>
+<div class="favbar" id="favbar" hidden></div>
+
+<div class="main">
+  <!-- 左:持仓 -->
+  <!-- 左一:扫链简易版 -->
+  <aside class="col side mscan" id="mscan">
+    <div class="sec">
+      <div class="sechead"><span>扫链</span><span style="display:flex;gap:8px;align-items:center"><a href="/scan" class="faint" style="font-size:11px;text-decoration:none">完整版 →</a><button class="icbtn" id="msHide" title="隐藏扫链栏">«</button></span></div>
+      <div class="pf" id="msPf"></div><div class="pf" id="msMode"></div>
+      <div class="mslist" id="msList"><div class="faint" style="padding:8px">加载中…</div></div>
+    </div>
+  </aside>
+  <aside class="col side">
+    <div class="sec">
+      <div class="sechead"><span><button class="icbtn" id="msShow" title="显示扫链栏" hidden>» 扫链</button> 我的持仓</span><button class="icbtn" id="wRefresh" title="刷新">↻</button></div>
+      <div class="pf" id="pf"></div><div class="hlist" id="hlist"><div class="faint" style="padding:8px">加载中…</div></div>
+    </div>
+    <div class="sec" id="recentSec" hidden>
+      <div class="sechead"><span>最近查看</span></div>
+      <div class="recent" id="recent"></div>
+    </div>
+    <div class="sec wstat" id="wstat"></div>
+  </aside>
+
+  <!-- 中:代币 + K 线 + 成交 -->
+  <section class="col center">
+    <div id="tokenHead"><div class="empty">加载账户…</div></div>
+    <div id="tokenBody" hidden>
+      <div class="chart" id="chart"></div>
+      <div class="tabs"><button data-t="trades" class="on">成交</button><button data-t="duel" id="duelTab" hidden>多空对决</button><button data-t="pos">持仓明细</button><button data-t="feed">全市场</button><span class="faint" style="margin-left:auto;align-self:center;font-size:11px">快捷键:按住空格 + W 买 1% · 空格 + F 清仓</span></div>
+      <div class="tabbody" id="tabbody"></div>
+    </div>
+  </section>
+
+  <!-- 右:交易 -->
+  <aside class="col trade">
+    <div class="sec">
+      <div class="seg" id="acctSeg"><button data-v="1" class="on">账号 1</button><button data-v="2">账号 2</button><button data-v="both">两个号</button></div>
+      <div class="side-tabs"><button class="b on" data-v="buy">买入</button><button class="s" data-v="sell">卖出</button></div>
+
+      <div id="buyBox">
+        <div class="grp" id="pctGrp"><div class="lbl"><span>按比例(每钱包上限 1%)</span></div><div class="qgrid two buyq" id="pctBtns"></div><div class="custom"><div class="in"><input id="pctIn" inputmode="decimal" placeholder="自定义比例 0.01–1"><span class="faint">% 总量</span></div><button id="pctGo">买入</button></div><div class="faint" style="font-size:11px;margin-top:4px">超过这个号剩余的额度时,自动按剩余额度买满</div></div>
+        <div class="grp" id="bnbGrp">
+          <div class="lbl"><span>按 BNB</span><span id="bal" class="num"></span></div>
+          <div class="qgrid buyq" id="bnbBtns"></div>
+          <div class="custom"><div class="in"><input id="bnb" inputmode="decimal" placeholder="自定义数量"><span class="faint">BNB</span></div><button id="bnbGo">买入</button></div>
+        </div>
+      </div>
+      <div id="sellBox" hidden>
+        <div class="grp"><div class="lbl"><span>卖出持仓比例</span><span id="holdHint" class="num"></span></div><div class="qgrid sellq" id="sellBtns"></div></div>
+      </div>
+      <div class="qrows" id="qprev" hidden></div>
+      <div class="grp">
+        <div class="lbl"><span>滑点</span><span id="slipInfo" class="faint"></span></div>
+        <div class="slipseg" id="slipSeg"></div>
+      </div>
+
+      <div class="opts">
+        <label class="sw"><span>一键交易(点金额直接下单,不再确认)</span><input type="checkbox" id="oneClick"><i></i></label>
+        <label class="sw" id="appSw" hidden><span>需要时去 Binance App 确认(Gang 内盘卖出)</span><input type="checkbox" id="appConfirm"><i></i></label>
+      </div>
+      <div class="hint" id="hint"></div>
+      <div class="confirm" id="confirm" hidden>
+        <div class="t" id="cfT"></div><div class="b" id="cfB"></div>
+        <div class="row"><button class="yes" id="cfYes">确认下单 ⏎</button><button id="cfNo">取消</button></div>
+      </div>
+      <div class="order" id="order" hidden><div class="h"><span id="ordT"></span><span class="chipst" id="ordS"></span></div><div class="lines" id="ordL"></div></div>
+    </div>
+    <div class="sec pos mypos" id="posBox" hidden><div class="sechead"><span>我的仓位</span><span id="posUnit" class="faint"></span></div><div id="posMini"></div></div>
+    <div class="sec pos"><details class="log"><summary>完整日志 ▸</summary><div id="log"></div></details></div>
+  </aside>
+</div>
+<div class="toasts" id="toasts"></div>
+<div class="drawer" id="drawer" hidden><div class="dt"><span>交易者在这个币上的盈亏</span><button class="icbtn" id="drawerX" title="关闭(Esc)">✕</button></div><div class="db" id="drawerBody"></div></div>
+<script src="/vendor/lightweight-charts.js"></script>
+<div class="modal" id="tipModal" hidden>
+  <div class="mbox tipbox">
+    <div class="tiphead"><span class="tipcup">☕</span><div><h3>打赏作者</h3><div class="faint">觉得好用,请作者喝杯咖啡</div></div><button class="icbtn" id="tipClose" title="关闭">✕</button></div>
+    <div class="tipinfo">打赏走链上合约:BNB 在同一笔交易里原样转给作者,合约<b>没有管理员、不存钱</b>,谁都改不了收款地址。不需要把地址加进 Binance App 地址簿。
+      <div class="kv"><span>打赏合约</span><a class="mono" id="tipC" target="_blank" rel="noopener"></a></div>
+      <div class="kv"><span>作者地址</span><a class="mono" id="tipA" target="_blank" rel="noopener"></a></div></div>
+    <div class="tiprow"><label>从</label><div class="segs" id="tipAcct"></div></div>
+    <div class="tiprow"><label>金额</label><div class="segs" id="tipAmts"></div><input id="tipAmt" class="xin" inputmode="decimal" placeholder="自定义" style="width:74px"><span class="faint">BNB</span></div>
+    <div class="tiprow"><label>留言</label><input id="tipMemo" class="xaddr" style="margin:0" maxlength="140" placeholder="可以不写(会记在链上)"></div>
+    <label class="sw" style="margin:4px 0 2px"><span style="font-size:12px">需要时去 Binance App 确认<div class="faint" style="font-size:11px">币安风控要求确认时照样提交,你在 App 里批准</div></span><input type="checkbox" id="tipApp" checked><i></i></label>
+    <button class="btn-acc" id="tipGo" style="width:100%;margin-top:10px">打赏</button>
+    <div class="faint" style="font-size:11px;text-align:center;margin-top:6px">点了直接打赏,链上转账无法撤回</div>
+    <pre class="sndlog" id="tipLog" hidden></pre>
+  </div>
+</div>
+<div class="modal" id="loginModal" hidden>
+  <div class="mbox">
+    <h3 id="lmTitle">登录 Binance 钱包</h3>
+    <div class="faint" style="font-size:12px">用 Binance App 扫码,在 App 里确认登录</div>
+    <div class="qr" id="lmQr">生成中…</div>
+    <div class="pair" id="lmPair"></div>
+    <div class="mstate" id="lmState"></div>
+    <div class="mrow"><a id="lmOpen" href="#" target="_blank" rel="noopener">手机上打开链接</a><button id="lmClose">关闭</button></div>
+  </div>
+</div>
+
+<script>
+const TOKEN_INIT = "__PANEL_TOKEN__";
+let TOKEN = TOKEN_INIT;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const BNB_PRESETS = ["0.01", "0.05", "0.1", "0.2", "0.5", "1"];
+const SELL_PRESETS = ["10", "25", "50", "75", "100"];
+let cur = null, wallets = null, running = false, tab = "trades", trades = null, pendingConfirm = null;
+const ui = { acct: localStorage.getItem("acct") || "1", side: "buy" };
+
+// ---------- 工具 ----------
+// 市值用:1000 以上就写成 K / M / B($6.94K)
+const mcFmt = (x) => (x >= 1e3 && x < 1e4 ? (x / 1e3).toFixed(2) + "K" : num(x, 2));
+function num(x, d = 4) {
+  if (x === null || x === undefined || !isFinite(x)) return "—";
+  const a = Math.abs(Number(x));
+  if (a >= 1e9) return (x / 1e9).toFixed(2) + "B";
+  if (a >= 1e6) return (x / 1e6).toFixed(2) + "M";
+  if (a >= 1e4) return (x / 1e3).toFixed(1) + "K";
+  if (a >= 1) return Number(x).toLocaleString("en-US", { maximumFractionDigits: d });
+  if (a === 0) return "0";
+  return Number(x).toPrecision(3).replace(/\.?0+$/, "");
+}
+const unitOf = (q) => (q && q.length < 10 ? q : "底池币");
+const short = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "";
+function ago(ts) {
+  if (!ts) return "—";
+  const s = Date.now() / 1000 - ts;
+  return s < 60 ? Math.max(0, Math.round(s)) + "秒" : s < 3600 ? Math.round(s / 60) + "分" : s < 86400 ? (s / 3600).toFixed(1) + "时" : (s / 86400).toFixed(1) + "天";
+}
+function until(iso) { const ms = typeof iso === "number" || /^\d+$/.test(String(iso)) ? Number(iso) : Date.parse(iso); const h = (ms - Date.now()) / 3.6e6; return !isFinite(h) ? "—" : h < 0 ? "已过期" : h < 48 ? h.toFixed(0) + " 小时" : (h / 24).toFixed(1) + " 天"; }
+const pnlPct = (v, c) => (v === undefined || v === null || !c || !(c.cost > 0) ? null : (v / c.cost - 1) * 100);
+const pct = (p) => p === null ? '<span class="faint">—</span>' : `<span class="${p >= 0 ? "up" : "down"}">${p >= 0 ? "+" : ""}${p.toFixed(1)}%</span>`;
+const logo = (ca, sym, cls = "") => `<div class="logo ${cls}"><img src="/img/${esc(ca)}" loading="lazy" alt="" onerror="this.remove()"><span>${esc((sym || "?").trim().slice(0, 1).toUpperCase())}</span></div>`;
+// 令牌不对(服务器换过令牌)时:重新拿页面里的令牌再试一次。被拒的请求服务器什么都没做,重试安全
+async function refreshToken() {
+  const html = await fetch(location.pathname, { cache: "no-store" }).then((r) => r.text());
+  const m = html.match(/const TOKEN_INIT = "([0-9a-f]{48})"/);
+  if (m) TOKEN = m[1];
+  return !!m;
+}
+async function post(path, data) {
+  const send = () => fetch(path, { method: "POST", headers: { "content-type": "application/json", "x-panel-token": TOKEN }, body: JSON.stringify(data) });
+  const r = await send();
+  if (r.status === 403 && /令牌/.test(await r.clone().text()) && (await refreshToken())) return send();
+  return r;
+}
+// ca:带上代币地址时这条提示可以点,点了打开这个币(交易页)
+function toast(msg, kind = "", ca = null) {
+  const t = document.createElement("div"); t.className = "toast " + kind + (ca ? " click" : ""); t.textContent = msg;
+  if (ca) { t.title = "点击打开 " + ca; t.onclick = () => { t.remove(); load(ca); }; }
+  $("toasts").appendChild(t); setTimeout(() => t.remove(), kind === "err" ? 9000 : ca ? 8000 : 5000);
+}
+function log(text, cls) {
+  const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = text;
+  $("log").appendChild(d); $("log").scrollTop = $("log").scrollHeight;
+}
+function copy(text, el) { navigator.clipboard?.writeText(text).then(() => { const o = el.textContent; el.textContent = "已复制"; setTimeout(() => (el.textContent = o), 900); toast("CA 已复制"); }, () => {}); }
+const myAddrs = () => wallets ? Object.fromEntries(wallets.accounts.map((a) => [String(a.address).toLowerCase(), a.acct])) : {};
+
+// ---------- 载入代币 ----------
+// ---------- 打赏作者(打赏合约 TMTip,见 contracts/) ----------
+let tipInfo = null, tipAmt = "0.05", tipAcct = null;
+async function openTip() {
+  $("tipModal").hidden = false; $("tipLog").hidden = true; $("tipLog").textContent = "";
+  if (!tipInfo) { try { const r = await post("/api/tip-info", {}); tipInfo = await r.json(); } catch {} }
+  if (tipInfo) {
+    $("tipC").textContent = tipInfo.contract; $("tipC").href = "https://bscscan.com/address/" + tipInfo.contract;
+    $("tipA").textContent = tipInfo.author; $("tipA").href = "https://bscscan.com/address/" + tipInfo.author;
+  }
+  const accts = wallets?.accounts ?? [];
+  if (!accts.some((a) => a.acct === tipAcct)) tipAcct = accts[0]?.acct ?? null;
+  $("tipAcct").innerHTML = accts.length ? accts.map((a) => `<button data-a="${a.acct}" class="${a.acct === tipAcct ? "on" : ""}">账号 ${a.acct} · ${a.bnb === null ? "—" : a.bnb.toFixed(3)} BNB</button>`).join("") : '<span class="faint">先登录一个账号</span>';
+  $("tipAcct").querySelectorAll("button").forEach((b) => (b.onclick = () => { tipAcct = b.dataset.a; openTip(); }));
+  $("tipAmts").innerHTML = ["0.01", "0.05", "0.1", "0.5"].map((v) => `<button data-v="${v}" class="${v === tipAmt && !$("tipAmt").value ? "on" : ""}">${v}</button>`).join("");
+  $("tipAmts").querySelectorAll("button").forEach((b) => (b.onclick = () => { tipAmt = b.dataset.v; $("tipAmt").value = ""; openTip(); }));
+  $("tipGo").textContent = `打赏 ${$("tipAmt").value.trim() || tipAmt} BNB`;
+  $("tipGo").disabled = !tipAcct;
+}
+$("tipBtn").onclick = openTip;
+$("tipClose").onclick = () => ($("tipModal").hidden = true);
+$("tipAmt").oninput = () => { $("tipAmts").querySelectorAll("button").forEach((b) => b.classList.remove("on")); $("tipGo").textContent = `打赏 ${$("tipAmt").value.trim() || tipAmt} BNB`; };
+$("tipGo").onclick = async () => {
+  const amount = $("tipAmt").value.trim() || tipAmt, memo = $("tipMemo").value.trim();
+  if (!/^\d+(\.\d{1,8})?$/.test(amount) || !(Number(amount) > 0) || Number(amount) > 5) return toast("打赏数量要在 0–5 BNB 之间", "err");
+  const pre = $("tipLog"), btn = $("tipGo");
+  pre.hidden = false; pre.textContent = ""; btn.disabled = true; btn.textContent = "打赏中…";
+  const line = (l) => { pre.textContent += (pre.textContent ? "\n" : "") + l; pre.scrollTop = 1e9; if (/⏳/.test(l)) toast("请打开 Binance App 批准这笔打赏", "ok"); };
+  let failed = false;
+  try {
+    const r = await post("/api/tip", { acct: tipAcct, amount, memo, appConfirm: $("tipApp").checked });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || r.status); }
+    const reader = r.body.getReader(), dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true }); let i;
+      while ((i = buf.indexOf("\n")) >= 0) { const l = buf.slice(0, i); buf = buf.slice(i + 1); if (l.startsWith("__DONE__")) failed = l.trim() !== "__DONE__ 0"; else line(l); }
+    }
+  } catch (e) { failed = true; line("✗ " + e.message); }
+  btn.disabled = false; btn.textContent = `打赏 ${amount} BNB`;
+  toast(failed ? "打赏没成功,看下面的记录" : "🙏 谢谢支持!", failed ? "err" : "ok");
+  if (!failed) { $("tipMemo").value = ""; loadWallets(true); }
+};
+// 从扫链 / 追踪页点「打赏作者」过来:?tip=1 直接打开
+if (new URLSearchParams(location.search).get("tip") === "1") setTimeout(openTip, 600);
+
+// 点了一个币、还在识别时:先用扫链列表 / 持仓里已有的信息把头部画出来(头像、名字、平台、市值),识别完再换成完整的
+function provisionalHead(ca) {
+  const k = ca.toLowerCase(), s = scanIdx?.[k], h = wallets?.tokens?.find((t) => t.ca.toLowerCase() === k);
+  const sym = s?.symbol ?? h?.symbol, plat = s?.platformLabel ?? h?.platformLabel, grad = s ? s.graduated : h ? h.stage !== "inner" : null;
+  const mc = s ? s.gmgn?.mcapUsd || s.mcapUsd : null;
+  if (!sym) return `<div class="thead"><div class="logo"><span>…</span></div><div><div class="tsym">识别中…</div><div class="ca mono faint">${esc(ca)}</div></div></div>`;
+  return `<div class="thead">${logo(k, sym)}<div style="min-width:0"><div><span class="tsym">${esc(s?.name || sym)}</span><span class="tname">Ticker <b>$${esc(sym)}</b></span></div>
+    <div class="badges">${grad === null ? "" : `<span class="bdg ${grad ? "outer" : "inner"}">${grad ? "外盘" : "内盘"}</span>`}${plat ? `<span class="bdg">${esc(plat)}</span>` : ""}${mc ? `<span class="bdg">市值 $${mcFmt(mc)}</span>` : ""}<span class="bdg faint">识别中…</span></div>
+    <div class="ca mono faint">${esc(ca)}</div></div></div>`;
+}
+// 鼠标停在列表里的币上 150 毫秒:让服务器先识别(结果缓存 4 秒),点下去基本不用等
+const prefetched = new Map();
+document.addEventListener("mouseover", (e) => {
+  const el = e.target.closest?.("#msList [data-ca], #hlist [data-ca], #favbar [data-ca], .home tr[data-ca], #recent [data-ca]");
+  if (!el) return;
+  const k = el.dataset.ca.toLowerCase();
+  clearTimeout(el._pf);
+  el._pf = setTimeout(() => {
+    if (Date.now() - (prefetched.get(k) ?? 0) < 4000 || (cur && cur.ca.toLowerCase() === k)) return;
+    prefetched.set(k, Date.now());
+    post("/api/prefetch", { ca: k }).catch(() => {});
+  }, 150);
+});
+document.addEventListener("mouseout", (e) => { const el = e.target.closest?.("[data-ca]"); if (el) clearTimeout(el._pf); });
+// wantCa:最近一次要打开的币。快速连点几个币、或者旧币的后台刷新回来得晚时,回来的结果如果不是这个币就丢掉,
+// 免得「上面是一个币、下面的图是另一个币」
+let wantCa = null, chartCa = null;
+async function load(ca, { quiet = false } = {}) {
+  ca = (ca ?? $("ca").value).trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(ca)) { if (!quiet) toast("CA 格式不对", "err"); return; }
+  const k = ca.toLowerCase();
+  if (!quiet) wantCa = k;
+  else if (wantCa && wantCa !== k) return;   // 后台刷新的不是现在要看的币,不用刷
+  if ((!cur || cur.ca.toLowerCase() !== k) && !quiet) { $("tokenHead").innerHTML = provisionalHead(ca); $("tokenBody").hidden = true; }
+  try {
+    const r = await post("/api/inspect", { ca });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    if (wantCa && d.ca.toLowerCase() !== wantCa) return;   // 回来晚了,已经换成别的币了
+    const switching = !cur || cur.ca.toLowerCase() !== d.ca.toLowerCase();
+    cur = d;
+    $("ca").value = "";
+    if (switching || chartCa !== d.ca.toLowerCase()) { history.replaceState(null, "", "/?ca=" + d.ca); remember(d); trades = null; renderChart(); }
+    renderHead(); renderTrade(); renderTab(); renderSideSel(); try { renderClip(); } catch {}
+    if (switching) { loadTrades(); loadAT(); loadNotes(); }
+  } catch (e) { if (!quiet && wantCa === k) { toast("查询失败:" + e.message, "err"); if (!cur || cur.ca.toLowerCase() !== k) $("tokenHead").innerHTML = `<div class="empty">查询失败:${esc(e.message)}</div>`; } }
+}
+// 一个号的盈亏:现值 + 已卖回 − 投入(都是底池币单位)
+function pnlOf(k) {
+  const h = cur.holdings[k], c = cur.costs?.[k];
+  if (!c || !(c.invested > 0) || h?.value === undefined || h?.value === null) return null;
+  const v = h.value + (c.received || 0) - c.invested;
+  return { v, p: (v / c.invested) * 100, invested: c.invested, received: c.received || 0, value: h.value, unit: c.unit, net: c.invested - (c.received || 0) };
+}
+const usd = (x) => (x === null || x === undefined || !isFinite(x) ? "—" : "$" + num(x, 2));
+const chgHtml = (x) => (x === null || x === undefined ? '<span class="faint">—</span>' : `<span class="${x >= 0 ? "up" : "down"}">${x >= 0 ? "+" : ""}${x.toFixed(1)}%</span>`);
+function renderHead() {
+  const d = cur, inner = d.stage === "inner", unit = unitOf(d.quote), st = d.stats;
+  const links = [["GMGN", `https://gmgn.ai/bsc/token/${d.ca}`], ["BscScan", `https://bscscan.com/token/${d.ca}`]];
+  if (d.platform === "four") links.push(["four.meme", `https://four.meme/token/${d.ca}`]);
+  if (d.platform?.startsWith("gang")) links.push(["gang.fun", `https://gang.fun/token/${d.ca}`]);
+  // 两个号合计的持仓和盈亏
+  let tokens = 0, value = 0, hasVal = false, pv = 0, inv = 0, hasPnl = false;
+  for (const k of Object.keys(d.holdings)) {
+    const h = d.holdings[k]; tokens += h.tokens || h.shares || 0;
+    if (h.value !== undefined && h.value !== null) { value += h.value; hasVal = true; }
+    const p = pnlOf(k); if (p) { pv += p.v; inv += p.invested; hasPnl = true; }
+  }
+  const holdTxt = tokens > 0 ? `${num(tokens)}${hasVal ? `<small class="mute">≈ ${num(value)} ${esc(unit)}</small>` : ""}` : '<span class="faint">未持有</span>';
+  const pnlTxt = hasPnl ? `<span class="${pv >= 0 ? "up" : "down"}">${pv >= 0 ? "+" : ""}${num(pv)}</span><small class="${pv >= 0 ? "up" : "down"}">${pv >= 0 ? "+" : ""}${((pv / inv) * 100).toFixed(1)}%</small>` : '<span class="faint">—</span>';
+  $("tokenHead").innerHTML = `
+    <div class="thead">${logo(d.ca, d.symbol)}
+      <div style="min-width:0"><div><span class="tsym" title="名称">${esc(d.name || d.symbol)}</span><span class="tname">Ticker <b>$${esc(d.symbol)}</b></span></div>
+        <div class="badges"><span class="bdg ${inner ? "inner" : "outer"}">${inner ? "内盘" : "外盘"}</span><span class="bdg">${esc(d.platformLabel)}</span>${d.taxed ? '<span class="bdg bad">有税</span>' : ""}${d.paused ? '<span class="bdg bad">已暂停</span>' : ""}${d.creatorHandle ? `<span class="bdg">开发者 ${esc(d.creatorHandle)}</span>` : ""}<span class="ca mono" id="caCopy" title="点击复制">${d.ca}</span></div></div>
+      <span class="htools" id="headTools"></span>
+      <div class="links">${links.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n} ↗</a>`).join("")}</div>
+    </div>
+    <div class="metrics">
+      <div class="m"><div class="k">市值${d.mcEstimated ? "(估算)" : ""}</div><div class="v num">${usd(d.mcUsd)}</div></div>
+      <div class="m mine"><div class="k">我的持仓</div><div class="v num">${holdTxt}</div></div>
+      <div class="m mine"><div class="k">盈亏(${esc(unit)})</div><div class="v num">${pnlTxt}</div></div>
+      ${d.progress !== undefined && d.progress !== null ? `<div class="m prog"><div class="k">${inner ? "内盘进度" : "已毕业"}</div><div class="v num">${Number(d.progress).toFixed(2)}%</div><div class="bar"><i style="width:${Math.min(100, d.progress)}%"></i></div></div>` : ""}
+      <div class="m"><div class="k">买 / 卖${st ? `(近 ${st.windowMin >= 120 ? Math.round(st.windowMin / 60) + " 时" : st.windowMin + " 分"})` : ""}</div><div class="v num">${st ? `<span class="up">${st.buys}</span> / <span class="down">${st.sells}</span>` : "—"}</div></div>
+      <div class="m"><div class="k">成交额</div><div class="v num">${d.volume24hUsd ? usd(d.volume24hUsd) + '<small class="faint">24h</small>' : st ? num(st.volume) + `<small class="faint">${esc(unit)}</small>` : "—"}</div></div>
+      <div class="m"><div class="k">5 分钟</div><div class="v num">${chgHtml(st?.chg5m)}</div></div>
+      <div class="m"><div class="k">1 小时</div><div class="v num">${chgHtml(st?.chg1h)}</div></div>
+      <div class="m"><div class="k">持有人</div><div class="v num">${d.holders ?? "—"}</div></div>
+      <div class="m"><div class="k">最近成交</div><div class="v">${d.lastTradeAt ? ago(d.lastTradeAt) + "前" : "—"}</div></div>
+    </div>`;
+  $("caCopy").onclick = (e) => copy(d.ca, e.target);
+  $("tokenBody").hidden = false;
+  renderHeadTools(); renderFavBar(); renderQb(); renderNotesUi(); renderMiniScan();
+}
+// ---------- K 线(自己画:成交 → K 线,外盘接 GeckoTerminal;GMGN 可切换) ----------
+const IVS = [["1s", 1], ["15s", 15], ["1m", 60], ["5m", 300], ["15m", 900], ["1h", 3600]];
+const cv = { iv: 60, mode: "mcap", src: "own" };
+try { Object.assign(cv, JSON.parse(localStorage.getItem("chartView") || "{}")); } catch {}
+const saveCv = () => { try { localStorage.setItem("chartView", JSON.stringify(cv)); } catch {} };
+let chart = null, cSeries = null, vSeries = null, hist = null, histCa = null, chartFit = true;
+async function renderChart() {
+  chartCa = cur?.ca?.toLowerCase() ?? null;   // 记下图表画的是哪个币(load 里对不上就重画)
+  const d = cur;
+  hist = null; histCa = d.ca; chartFit = true;
+  $("chart").innerHTML = `<div class="ctool">
+      <span class="cseg" id="cIv">${IVS.map(([l, s]) => `<button data-s="${s}" class="${cv.iv === s ? "on" : ""}">${l}</button>`).join("")}</span>
+      <span class="cseg" id="cMode"><button data-m="mcap" class="${cv.mode === "mcap" ? "on" : ""}">市值</button><button data-m="price" class="${cv.mode === "price" ? "on" : ""}">价格</button></span>
+      <span class="cinfo faint" id="cInfo"></span>
+      <button class="hbtn ${qb.on ? "on" : ""}" id="qbTog" style="margin-left:auto" title="一键买卖浮窗(P1/P2/P3 预设,可拖动)">⚡ 浮窗</button><span class="cseg" id="cSrc"><button data-c="own" class="${cv.src === "own" ? "on" : ""}">自绘</button><button data-c="gmgn" class="${cv.src === "gmgn" ? "on" : ""}">GMGN</button></span>
+    </div><div class="cbody" id="cBody"></div>`;
+  document.querySelectorAll("#cIv button").forEach((b) => (b.onclick = () => { cv.iv = Number(b.dataset.s); saveCv(); chartFit = true; drawChart(); markOn("#cIv button", "s", cv.iv); }));
+  document.querySelectorAll("#cMode button").forEach((b) => (b.onclick = () => { cv.mode = b.dataset.m; saveCv(); chartFit = true; drawChart(); markOn("#cMode button", "m", cv.mode); }));
+  document.querySelectorAll("#cSrc button").forEach((b) => (b.onclick = () => { cv.src = b.dataset.c; saveCv(); renderChart(); }));
+  $("qbTog").onclick = () => { qb.on = !qb.on; saveQb(); renderQb(); markQbBtn(); };
+  $("cIv").style.visibility = $("cMode").style.visibility = cv.src === "own" ? "" : "hidden";
+  if (cv.src === "gmgn") {
+    const deployed = d.symbol !== "(未部署)";
+    $("cBody").innerHTML = deployed
+      ? `<iframe src="https://www.gmgn.cc/kline/bsc/${d.ca.toLowerCase()}?theme=dark&interval=1" loading="lazy" referrerpolicy="no-referrer"></iframe><div class="gmgncover"></div><a class="gmgncredit" href="https://gmgn.ai/bsc/token/${d.ca.toLowerCase()}" target="_blank" rel="noopener" title="K 线图由 GMGN 免费提供">K 线:GMGN ↗</a>`
+      : `<div class="ph">这个币还在内盘、代币合约还没部署,GMGN 没有 K 线</div>`;
+    chart = null; return;
+  }
+  if (!window.LightweightCharts) { $("cBody").innerHTML = '<div class="ph">图表库没加载出来,刷新一下</div>'; return; }
+  chart = LightweightCharts.createChart($("cBody"), {
+    autoSize: true,
+    layout: { background: { color: "#0d0f13" }, textColor: "#8d96a7", fontSize: 11 },
+    grid: { vertLines: { color: "#161a21" }, horzLines: { color: "#161a21" } },
+    rightPriceScale: { borderColor: "#1e232c" },
+    timeScale: { borderColor: "#1e232c", timeVisible: true, secondsVisible: true, rightOffset: 4 },
+    crosshair: { mode: 0 },
+    localization: { priceFormatter: (p) => (cv.mode === "mcap" ? "$" : "$") + num(p, 4), timeFormatter: (t) => new Date(t * 1000).toLocaleString("zh-CN", { hour12: false, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }) },
+  });
+  cSeries = chart.addCandlestickSeries({ upColor: "#16c784", downColor: "#ea3943", borderVisible: false, wickUpColor: "#16c784", wickDownColor: "#ea3943", priceFormat: { type: "custom", formatter: (p) => "$" + num(p, 4), minMove: 1e-12 } });
+  vSeries = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, color: "#2a313d" });
+  chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+  cSeries.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.22 } });
+  $("cInfo").textContent = "加载成交…";
+  await loadHistory();
+}
+function markOn(sel, key, val) { document.querySelectorAll(sel).forEach((b) => b.classList.toggle("on", String(b.dataset[key]) === String(val))); }
+async function loadHistory() {
+  if (!cur || cv.src !== "own") return;
+  const ca = cur.ca;
+  try {
+    const r = await post("/api/history", { ca });
+    const h = await r.json();
+    if (!r.ok) throw new Error(h.error);
+    if (!cur || cur.ca !== ca) return;
+    hist = h; drawChart();
+  } catch (e) { if ($("cInfo")) $("cInfo").textContent = "读取成交失败:" + e.message; }
+}
+// 成交点 / 外盘分钟 K 线 → 按所选周期聚合(都是美元;市值 = 单价 × 总量)
+function buildCandles(h, iv, mode) {
+  const k = mode === "mcap" ? h.supply || 1 : 1;
+  const map = new Map();
+  const put = (t, o, hi, lo, c, v) => {
+    const b = Math.floor(t / iv) * iv, x = map.get(b);
+    if (!x) map.set(b, { time: b, open: o * k, high: hi * k, low: lo * k, close: c * k, v });
+    else { x.high = Math.max(x.high, hi * k); x.low = Math.min(x.low, lo * k); x.close = c * k; x.v += v; }
+  };
+  const dexStart = h.dex?.bars?.length ? h.dex.bars[0].t : Infinity;
+  for (const p of h.points) if (p.t < dexStart) put(p.t, p.p, p.p, p.p, p.p, p.v);
+  // 外盘 K 线是 1 分钟一根,周期小于 1 分钟时按 1 分钟画
+  if (h.dex?.bars?.length) for (const b of h.dex.bars) { put(b.t, b.o, b.h, b.l, b.c, b.v); }
+  const out = [...map.values()].sort((a, b) => a.time - b.time);
+  // 相邻 K 线首尾相接(内盘成交稀疏,开盘价用上一根的收盘价,看起来才连续)
+  for (let i = 1; i < out.length; i++) { const p = out[i - 1].close, c = out[i]; c.high = Math.max(c.high, p); c.low = Math.min(c.low, p); c.open = p; }
+  return out;
+}
+function drawChart() {
+  if (!chart || !hist) return;
+  const iv = hist.dex?.bars?.length && cv.iv < 60 && !hist.points.length ? 60 : cv.iv;
+  const cs = buildCandles(hist, iv, cv.mode);
+  cSeries.setData(cs.map(({ v, ...c }) => c));
+  vSeries.setData(cs.map((c) => ({ time: c.time, value: c.v, color: c.close >= c.open ? "rgba(22,199,132,.35)" : "rgba(234,57,67,.35)" })));
+  // 我自己的买卖:同一根 K 线里合并成一个标记
+  const ms = new Map();
+  for (const m of hist.mine ?? []) { const b = Math.floor(m.t / iv) * iv, key = b + m.side; const x = ms.get(key) || { time: b, side: m.side, accts: new Set() }; x.accts.add(m.acct); ms.set(key, x); }
+  cSeries.setMarkers([...ms.values()].sort((a, b) => a.time - b.time).map((x) => ({
+    time: x.time, position: x.side === "buy" ? "belowBar" : "aboveBar", shape: x.side === "buy" ? "arrowUp" : "arrowDown",
+    color: x.side === "buy" ? "#16c784" : "#ea3943", text: `${[...x.accts].join("+")}${x.side === "buy" ? "买" : "卖"}`,
+  })));
+  if (chartFit) { chart.timeScale().fitContent(); chartFit = false; }
+  const last = cs[cs.length - 1];
+  $("cInfo").textContent = !cs.length ? "还没有成交" :
+    `${hist.total} 笔${hist.partial ? "(只有最近约 1 小时)" : ""} · ${hist.source ?? ""}${hist.dex?.bars?.length ? " + " + (hist.dex.dex || "DEX") + "(GeckoTerminal)" : ""}${hist.supplyNote && cv.mode === "mcap" ? " · " + hist.supplyNote : ""}`;
+}
+
+// ---------- 成交 / 持仓明细 ----------
+// 成交:新的接口可以一直往前翻到开盘第一笔;点地址看这个人在这个币上的盈亏
+async function loadTrades(more = false) {
+  if (!cur) return;
+  const ca = cur.ca;
+  try {
+    const before = more && trades?.items?.length ? trades.items[trades.items.length - 1].ts : undefined;
+    const r = await post("/api/tradespage", { ca, before, limit: more ? 200 : 100 });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    if (!cur || cur.ca !== ca) return;
+    if (more && trades?.items) { const seen = new Set(trades.items.map((t) => t.tx + t.side + t.tokens)); trades = { ...d, items: trades.items.concat(d.items.filter((t) => !seen.has(t.tx + t.side + t.tokens))) }; }
+    else if (trades?.items?.length > 100 && !more) {
+      // 自动刷新时只把新的合进来,保留已经往前翻出来的
+      const seen = new Set(trades.items.map((t) => t.tx + t.side + t.tokens));
+      trades = { ...trades, total: d.total, source: d.source, items: d.items.filter((t) => !seen.has(t.tx + t.side + t.tokens)).concat(trades.items) };
+    } else trades = d;
+  } catch (e) { if (!more) trades = { error: e.message, items: [] }; else toast("加载更早的成交失败:" + e.message, "err"); }
+  if (tab === "trades") renderTab();
+}
+function renderTab() {
+  document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === tab));
+  if (tab === "feed") return renderFeed();
+  if (tab === "duel") return renderDuel();
+  if (!cur) return;
+  const unit = unitOf(cur.quote);
+  if (tab === "trades") {
+    if (!trades) { $("tabbody").innerHTML = '<div class="empty">加载成交…</div>'; return; }
+    if (!trades.items.length) {
+      $("tabbody").innerHTML = `<div class="empty">${trades.error ? "读取失败:" + esc(trades.error) : trades.source ? "还没有成交" : "这个币没有内盘成交记录,外盘成交请看 K 线或点右上角 GMGN ↗"}</div>`;
+      return;
+    }
+    const mine = myAddrs();
+    const qUsd = hist?.quoteUsd ?? cur.quoteUsd, sup = hist?.supply ?? cur.supply;
+    const mcAt = (t) => (sup && qUsd && t.price ? t.price * sup * qUsd : null);
+    $("tabbody").innerHTML = `<table class="num"><thead><tr><th>时间</th><th>方向</th><th>金额</th><th>数量</th><th>成交时市值</th><th>交易者</th></tr></thead><tbody>${trades.items.map((t) => {
+      const me = mine[t.trader];
+      return `<tr class="${me ? "mine" : ""}"><td class="mute" title="${new Date(t.ts * 1000).toLocaleString("zh-CN", { hour12: false })}">${ago(t.ts)}前</td><td class="${t.side === "buy" ? "up" : "down"}">${t.side === "buy" ? "买入" : "卖出"}</td><td>${num(t.quote)} ${esc(unit)}${qUsd ? `<span class="faint"> $${num(t.quote * qUsd, 2)}</span>` : ""}</td><td>${num(t.tokens)}</td><td class="mute">${usd(mcAt(t))}</td><td><a class="trd mono" data-tr="${esc(t.trader)}" title="点击看 ${esc(t.trader)} 在这个币上的盈亏">${t.handle ? `<span style="color:var(--text)">${esc(t.handle)}</span>` : esc(short(t.trader))}</a> <a class="faint" style="text-decoration:none" href="https://bscscan.com/tx/${esc(t.tx)}" target="_blank" rel="noopener" title="看交易">↗</a>${me ? `<span class="me">账号${me}</span>` : ""}</td></tr>`;
+    }).join("")}</tbody></table>
+    <div class="more" id="tMore">${trades.end ? (trades.partial ? `只查到最近约 1 小时的 ${trades.total} 笔(在 .env 配 BSC_LOG_RPC 可查全)` : `已到开盘第一笔 · 共 ${trades.total} 笔`) : `已显示 ${trades.items.length} / ${trades.total} 笔 · 点这里加载更早的`}</div>`;
+    document.querySelectorAll("#tabbody [data-tr]").forEach((a) => (a.onclick = () => openTrader(a.dataset.tr)));
+    if (!trades.end) $("tMore").onclick = () => { $("tMore").textContent = "加载中…"; loadTrades(true); };
+  } else {
+    $("tabbody").innerHTML = `<div class="poscards">${Object.entries(cur.holdings).map(([k, h]) => {
+      const c = cur.costs?.[k], p = pnlPct(h.value, c), has = h.tokens > 0 || h.shares > 0;
+      return `<div class="pcard"><div class="kv"><b>账号 ${k}</b><span class="mono faint">${esc(short(cur.wallets[k]))}</span></div>
+        <div class="p">${has ? pct(p) : '<span class="faint">未持有</span>'}</div>
+        <div class="kv"><span>持有</span><b class="num">${has ? (h.shares !== undefined ? num(h.shares) + " 份" : num(h.tokens) + " 个") : "0"}${h.pctOfSupply ? " · " + h.pctOfSupply + "%" : ""}</b></div>
+        <div class="kv"><span>现值</span><b class="num">${h.value !== undefined ? num(h.value) + " " + esc(unit) : cur.stage === "inner" ? "—" : "外盘按卖出报价"}</b></div>
+        <div class="kv"><span>成本</span><b class="num">${c ? num(c.cost) + " " + esc(c.unit) : "—"}</b></div></div>`;
+    }).join("")}</div>`;
+  }
+}
+
+// ---------- 交易者盈亏抽屉 ----------
+async function openTrader(addr) {
+  const ca = cur.ca, unit = unitOf(cur.quote);
+  $("drawer").hidden = false;
+  $("drawerBody").innerHTML = `<div class="faint">读取 ${esc(short(addr))} 的成交…</div>`;
+  try {
+    const r = await post("/api/trader", { ca, trader: addr });
+    const s = await r.json();
+    if (!r.ok) throw new Error(s.error);
+    if (!cur || cur.ca !== ca) return;
+    const u = (x) => (s.quoteUsd && x !== null && x !== undefined ? `<span class="faint"> $${num(x * s.quoteUsd, 2)}</span>` : "");
+    const pnl = (x) => `<span class="${x >= 0 ? "up" : "down"}">${x >= 0 ? "+" : ""}${num(x)}</span>`;
+    const me = myAddrs()[addr.toLowerCase()];
+    $("drawerBody").innerHTML = `
+      <div class="dh"><div><b>${esc(s.handle || short(addr))}</b>${me ? ` <span class="me">账号${me}</span>` : ""}<div class="mono faint" style="font-size:11px;word-break:break-all">${esc(addr)}</div></div>
+        <a class="faint" href="https://bscscan.com/address/${esc(addr)}" target="_blank" rel="noopener">BscScan ↗</a></div>
+      <div class="dbig">${pnl(s.total)} <small>${esc(unit)}</small>${u(s.total)} ${s.pct !== null ? `<small class="${s.pct >= 0 ? "up" : "down"}">${s.pct >= 0 ? "+" : ""}${s.pct.toFixed(1)}%</small>` : ""}</div>
+      <div class="kv"><span>已实现</span><b class="num">${pnl(s.realized)}${u(s.realized)}</b></div>
+      <div class="kv"><span>未实现(按最新成交价)</span><b class="num">${pnl(s.unrealized)}${u(s.unrealized)}</b></div>
+      <div class="kv"><span>买入 ${s.buys} 笔</span><b class="num">${num(s.boughtTokens)} 个 · ${num(s.boughtQ)} ${esc(unit)}</b></div>
+      <div class="kv"><span>卖出 ${s.sells} 笔</span><b class="num">${num(s.soldTokens)} 个 · ${num(s.soldQ)} ${esc(unit)}</b></div>
+      <div class="kv"><span>买入均价 / 卖出均价</span><b class="num">${s.avgBuy ? num(s.avgBuy) : "—"} / ${s.avgSell ? num(s.avgSell) : "—"}</b></div>
+      <div class="kv"><span>现在持有(${esc(s.holdSrc)})</span><b class="num">${num(s.hold)} 个${u(s.holdQ)}</b></div>
+      <div class="kv"><span>第一笔</span><b>${s.firstAt ? ago(s.firstAt) + "前" : "—"}</b></div>
+      <table class="num" style="margin-top:10px"><thead><tr><th>时间</th><th>方向</th><th>金额</th><th>数量</th></tr></thead><tbody>${s.trades.map((t) => `<tr><td class="mute">${ago(t.ts)}前</td><td class="${t.side === "buy" ? "up" : "down"}">${t.side === "buy" ? "买" : "卖"}</td><td>${num(t.quote)}</td><td><a class="mute" style="text-decoration:none" href="https://bscscan.com/tx/${esc(t.tx)}" target="_blank" rel="noopener">${num(t.tokens)} ↗</a></td></tr>`).join("")}</tbody></table>`;
+  } catch (e) { $("drawerBody").innerHTML = `<div class="down">读取失败:${esc(e.message)}</div>`; }
+}
+
+// ---------- 实时推送(链上事件 → 服务器 → 这里) ----------
+const PLAT = { four: "four", gangv1: "Gang", gangv2: "Gang V2", idagent: "Flap 内盘" };
+const feed = [];   // 全市场:最近的新盘 / 成交
+let es = null, esOk = false, symMap = {}, symAt = 0;
+let soundOn = false;
+try { soundOn = localStorage.getItem("launchSound") === "1"; } catch {}
+// 掉线提醒:弹窗 + 提示音 + 浏览器通知(服务器连续 2 次查到没登录才推过来)
+async function onDropout(ev) {
+  const msg = `账号 ${ev.acct} 掉线了(币安钱包登录失效)${ev.address ? "\n" + ev.address : ""}\n这个号现在下不了单,重新扫码登录就好。`;
+  beep(); setTimeout(beep, 450);
+  try { if ("Notification" in window && Notification.permission === "granted") new Notification(`账号 ${ev.acct} 掉线了`, { body: "币安钱包登录失效,打开面板重新扫码登录" }); } catch {}
+  loadWallets(true);
+  if (await askConfirm(`⚠️ 账号 ${ev.acct} 掉线了`, msg)) openLogin(ev.acct);
+}
+// 浏览器通知要用户点过页面才能申请:第一次点页面时问一次
+document.addEventListener("click", () => { try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch {} }, { once: true });
+function beep() {
+  try { const ac = new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(0.15, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.35); o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.36); } catch {}
+}
+// 代币名字:扫链列表里有(服务器缓存),1 分钟更新一次
+async function loadSyms() {
+  if (Date.now() - symAt < 60_000) return; symAt = Date.now();
+  try { const r = await post("/api/scan", { lite: true }); const d = await r.json(); if (r.ok) for (const t of d.tokens) symMap[t.ca] = t.symbol; } catch {}
+  for (const t of wallets?.tokens ?? []) symMap[t.ca] ??= t.symbol;
+}
+const symOf = (ev) => ev.symbol || symMap[ev.ca] || (ev.ca ? short(ev.ca) : "?");
+function startStream() {
+  try { es?.close(); } catch {}
+  es = new EventSource("/api/stream?t=" + TOKEN);
+  es.onopen = () => { esOk = true; renderLiveDot(); };
+  es.onerror = async () => {
+    esOk = false; renderLiveDot();
+    // 令牌换过:重新拿令牌再连;其他情况 EventSource 会自己重连
+    if (es.readyState === 2 && (await refreshToken())) setTimeout(startStream, 1000);
+  };
+  es.onmessage = (m) => { let ev; try { ev = JSON.parse(m.data); } catch { return; } onLive(ev); };
+}
+function renderLiveDot() { const d = $("liveDot"); if (d) { d.className = "dot " + (esOk ? "on" : "off"); d.title = esOk ? "实时推送已连接(链上事件)" : "实时推送断开,自动重连中(期间按定时刷新)"; } }
+let hdrT = null, walT = null;
+function onLive(ev) {
+  if (ev.type === "hello") return;
+  if (ev.type === "lists") return loadLists();   // 收藏 / 屏蔽在别的页面改了
+  if (ev.type === "notice") { toast(ev.text, /失败|⚠️/.test(ev.text) ? "err" : "ok"); return; }
+  if (ev.type === "dropout") return onDropout(ev);
+  if (ev.type === "track") { toast(`👁 ${ev.targetName || short(ev.target)} ${ev.action} ${ev.symbol} ${num(ev.quoteAmt)} ${ev.quote}`, ev.side === "buy" ? "ok" : "err", ev.ca); return; }   // 追踪的钱包有买卖
+  feed.unshift(ev); if (feed.length > 200) feed.length = 200;
+  if (tab === "feed") renderTab();
+  const mine = myAddrs();
+  if (ev.type === "launch") {
+    toast(`🆕 新盘 ${symOf(ev)} · ${PLAT[ev.platform] ?? ev.platform}`, "", ev.ca || null);
+    if (soundOn) beep();
+    symAt = 0;
+    scanIdxAt = 0; loadScanIdx();   // 左侧扫链马上带上新盘
+  }
+  if (ev.type === "graduate") { scanIdxAt = 0; loadScanIdx(); }
+  if (ev.type === "graduate" && cur && ev.ca === cur.ca.toLowerCase()) toast(`🎓 ${cur.symbol} 毕业了,已上外盘`, "ok");
+  // 自己的成交:3 秒后刷新持仓;20 秒后再刷一次(币安交易记录收录有延迟,成本要等它)
+  if (ev.type === "trade" && ev.trader && mine[ev.trader]) { clearTimeout(walT); walT = setTimeout(() => loadWallets(true), 3000); clearTimeout(walT2); walT2 = setTimeout(() => loadWallets(true), 20000); }
+  if (!cur || !ev.ca || ev.ca !== cur.ca.toLowerCase()) return;
+  if (ev.type === "trade") {
+    // 成交列表:新的放最前(按交易去重)
+    if (trades?.items) {
+      const k = ev.tx + ev.side + ev.trader;
+      if (!trades.items.some((t) => t.tx + t.side + t.trader === k)) {
+        trades.items.unshift({ ts: ev.ts, side: ev.side, trader: ev.trader, tx: ev.tx, quote: ev.quote, tokens: ev.tokens, price: ev.price, handle: null, live: true });
+        trades.total = (trades.total || 0) + 1;
+        if (tab === "trades") renderTab();
+      }
+    }
+    // K 线:把这笔加进去(美元)
+    if (hist && hist.quoteUsd && ev.price > 0 && !hist.points.some((p) => p.tx === ev.tx)) {
+      hist.points.push({ t: ev.ts, p: ev.price * hist.quoteUsd, v: ev.quote * hist.quoteUsd, tx: ev.tx });
+      hist.total++;
+      if (mine[ev.trader]) hist.mine.push({ t: ev.ts, side: ev.side, acct: mine[ev.trader], quote: ev.quote, tokens: ev.tokens });
+      drawChart();
+    }
+    // 头部数据(市值 / 进度 / 涨幅)2 秒后刷新一次
+    clearTimeout(hdrT); hdrT = setTimeout(() => cur && load(cur.ca, { quiet: true }), 2000);
+  }
+}
+function renderFeed() {
+  loadSyms();
+  const mine = myAddrs();
+  $("tabbody").innerHTML = `<div class="feedhead"><span class="faint">三个平台的链上新盘 / 成交,实时推送(只显示打开页面之后的)</span>
+      <label class="sw" style="margin-left:auto;gap:8px"><span>新盘提示音</span><input type="checkbox" id="sndOn" ${soundOn ? "checked" : ""}><i></i></label></div>` +
+    (feed.length ? `<table class="num"><thead><tr><th>时间</th><th>平台</th><th>代币</th><th>动作</th><th>金额</th><th>交易者</th></tr></thead><tbody>${feed.map((e) => {
+      const me = e.trader && mine[e.trader];
+      const act = e.type === "launch" ? '<span style="color:var(--acc)">新盘</span>' : e.type === "graduate" ? '<span style="color:var(--blue)">毕业</span>' : e.side === "buy" ? '<span class="up">买入</span>' : '<span class="down">卖出</span>';
+      return `<tr class="go ${me ? "mine" : ""}" data-ca="${esc(e.ca ?? "")}"><td class="mute">${new Date(e.ts * 1000).toLocaleTimeString("zh-CN", { hour12: false })}</td><td class="faint">${esc(PLAT[e.platform] ?? e.platform)}</td><td><b>${esc(symOf(e))}</b></td><td>${act}</td><td>${e.type === "trade" ? num(e.quote) + (e.platform === "four" || e.platform === "gangv1" ? " BNB" : "") : ""}</td><td class="mono mute">${e.trader ? esc(short(e.trader)) : e.creator ? "创建者 " + esc(short(e.creator)) : ""}${me ? `<span class="me">账号${me}</span>` : ""}</td></tr>`;
+    }).join("")}</tbody></table>` : '<div class="empty">等待链上事件…(有新盘或成交会马上出现在这里)</div>');
+  $("sndOn").onchange = () => { soundOn = $("sndOn").checked; try { localStorage.setItem("launchSound", soundOn ? "1" : "0"); } catch {} if (soundOn) beep(); };
+  document.querySelectorAll("#tabbody tr.go").forEach((r) => (r.onclick = () => r.dataset.ca && load(r.dataset.ca)));
+}
+
+// ---------- 收藏栏 / 屏蔽(和扫链页共用,存在本机 panel/lists.json) ----------
+let lists = { groups: [{ id: "default", name: "默认" }], favs: {}, blockTokens: {}, blockDevs: {} };
+let favGroup = "all", scanIdx = {}, scanIdxAt = 0, addingGroup = false;
+try { favGroup = localStorage.getItem("favGroup") || "all"; } catch {}
+async function loadLists() {
+  try { const r = await post("/api/lists", {}); if (r.ok) lists = await r.json(); } catch {}
+  renderFavBar(); if (cur) renderHeadTools();
+}
+async function listOp(b) {
+  try { const r = await post("/api/lists/op", b); const d = await r.json(); if (!r.ok) throw new Error(d.error); lists = d; }
+  catch (e) { toast("操作失败:" + e.message, "err"); }
+  renderFavBar(); if (cur) renderHeadTools(); loadTicker(true);
+}
+// 收藏栏的市值 + 24h 涨跌(服务器按成交 / 外盘 K 线算,30 秒缓存)
+let tickIdx = {}, tickAt = 0;
+async function loadTicker(force = false) {
+  const cas = Object.keys(lists.favs || {});
+  if (!cas.length || (!force && Date.now() - tickAt < 25_000)) return;
+  tickAt = Date.now();
+  try { const r = await post("/api/ticker", { cas }); if (r.ok) Object.assign(tickIdx, await r.json()); } catch {}
+  renderFavBar();
+}
+// 收藏栏的市值:用扫链列表(服务器有缓存),30 秒更新
+async function loadScanIdx() {
+  if (Date.now() - scanIdxAt < 30_000) return; scanIdxAt = Date.now();
+  try { const r = await post("/api/scan", { lite: true }); const d = await r.json(); if (r.ok) { scanIdx = Object.fromEntries(d.tokens.map((t) => [t.ca, t])); for (const t of d.tokens) symMap[t.ca] = t.symbol; } } catch {}
+  renderFavBar(); renderMiniScan();
+}
+function renderFavBar() {
+  const favs = Object.entries(lists.favs || {});
+  const bar = $("favbar");
+  bar.hidden = false;
+  if (favGroup !== "all" && !lists.groups.some((g) => g.id === favGroup)) favGroup = "all";
+  const shown = favs.filter(([, f]) => favGroup === "all" || f.group === favGroup).sort((a, b) => a[1].at - b[1].at);
+  bar.innerHTML = `<span class="fgroups">${[["all", "全部"], ...lists.groups.map((g) => [g.id, g.name])].map(([id, n]) => `<button data-g="${esc(id)}" class="${favGroup === id ? "on" : ""}">${esc(n)}</button>`).join("")}
+      ${addingGroup ? `<input id="newGroup" placeholder="新分组名,回车" maxlength="20">` : `<button data-act="add" title="新建分组">+</button>`}${favGroup !== "all" && favGroup !== "default" ? `<button data-act="del" title="删除这个分组(里面的币移到默认)">删组</button>` : ""}</span>
+    <span class="fitems">${shown.map(([ca, f]) => {
+      const s = scanIdx[ca], tk = tickIdx[ca], mc = tk?.mcUsd ?? (s ? s.gmgn?.mcapUsd || s.mcapUsd : null), ch = tk?.change;
+      return `<button class="fchip ${cur && cur.ca.toLowerCase() === ca ? "on" : ""}" data-ca="${esc(ca)}" title="${esc(ca)}">${logo(ca, s?.symbol || f.symbol)}<b>${esc(s?.symbol || f.symbol || short(ca))}</b>${mc ? `<span class="faint">$${mcFmt(mc)}</span>` : ""}${ch !== null && ch !== undefined ? `<span class="${ch >= 0 ? "up" : "down"}" title="${tk.since ? "不到 24 小时,从开盘算" : "24 小时涨跌"}">${ch >= 0 ? "+" : ""}${ch.toFixed(2)}%</span>` : ""}</button>`;
+    }).join("") || `<span class="faint" style="font-size:12px">${favs.length ? "这个分组还没有币" : "还没有收藏:打开代币后点「☆ 收藏」,就会出现在这里"}</span>`}</span>`;
+  bar.querySelectorAll("[data-g]").forEach((b) => (b.onclick = () => { favGroup = b.dataset.g; try { localStorage.setItem("favGroup", favGroup); } catch {} renderFavBar(); }));
+  bar.querySelectorAll(".fchip").forEach((b) => (b.onclick = () => load(b.dataset.ca)));
+  bar.querySelector('[data-act="add"]')?.addEventListener("click", () => { addingGroup = true; renderFavBar(); $("newGroup").focus(); });
+  bar.querySelector('[data-act="del"]')?.addEventListener("click", async () => { const g = lists.groups.find((x) => x.id === favGroup); if (await askConfirm(`删除分组「${g?.name}」?`, "里面的币会移到「默认」分组。")) { await listOp({ op: "deleteGroup", id: favGroup }); favGroup = "all"; renderFavBar(); } });
+  const ng = $("newGroup");
+  if (ng) ng.onkeydown = async (e) => { if (e.key === "Enter" && ng.value.trim()) { addingGroup = false; await listOp({ op: "addGroup", name: ng.value.trim() }); } else if (e.key === "Escape") { addingGroup = false; renderFavBar(); } };
+}
+// 代币头部的 ★ 和 ⊘
+function renderHeadTools() {
+  const box = $("headTools"); if (!box || !cur) return;
+  const ca = cur.ca.toLowerCase(), fav = lists.favs[ca], blk = !!lists.blockTokens[ca];
+  const dev = (scanIdx[ca]?.creator) || null, devBlk = !!(dev && lists.blockDevs[dev]);
+  box.innerHTML = `<button class="hbtn ${fav ? "on" : ""}" id="favTog" title="${fav ? "取消收藏" : "收藏"}">${fav ? "★ 已收藏" : "☆ 收藏"}</button>` +
+    (fav && lists.groups.length > 1 ? `<select id="favGrp">${lists.groups.map((g) => `<option value="${esc(g.id)}" ${fav.group === g.id ? "selected" : ""}>${esc(g.name)}</option>`).join("")}</select>` : "") +
+    `<button class="hbtn ${blk ? "bad" : ""}" id="blkTok" title="屏蔽后在扫链页隐藏">${blk ? "⊘ 已屏蔽" : "⊘ 屏蔽"}</button>` +
+    (dev ? `<button class="hbtn ${devBlk ? "bad" : ""}" id="blkDev" title="屏蔽这个开发者的所有币(扫链页隐藏)">${devBlk ? "开发者已屏蔽" : "屏蔽开发者"}</button>` : "");
+  $("favTog").onclick = () => listOp({ op: "fav", ca, on: !fav, group: favGroup !== "all" ? favGroup : undefined, symbol: cur.symbol, platform: cur.platform });
+  $("favGrp")?.addEventListener("change", (e) => listOp({ op: "fav", ca, on: true, group: e.target.value, symbol: cur.symbol, platform: cur.platform }));
+  $("blkTok").onclick = () => listOp({ op: "blockToken", ca, on: !blk, label: cur.symbol });
+  $("blkDev")?.addEventListener("click", () => listOp({ op: "blockDev", address: dev, on: !devBlk, label: cur.symbol }));
+}
+
+// ---------- 账户总览的附加区块:设置 / 底池币 / 授权 / 耗时 ----------
+let xSettings = null, xQuotes = null, xApprovals = null, xLatency = null;
+async function loadExtras() {
+  const get = async (p, b = {}) => { try { const r = await post(p, b); return r.ok ? await r.json() : null; } catch { return null; } };
+  [xSettings, xQuotes, xApprovals, xLatency, at] = await Promise.all([get("/api/settings"), get("/api/quote-balances"), get("/api/approvals"), get("/api/latency-stats", { days: 7 }), get("/api/autotransfer")]);
+  renderExtras();
+}
+function renderExtras() {
+  const box = $("homeExtras"); if (!box) return;
+  renderSend();   // 自动转出地址加载好了,转账的快捷收款地址里补上它
+  const quotes = (xQuotes ?? []).filter((q) => q.usd === null || q.usd >= 0.5);   // 不到 0.5 美元的零头不显示
+  box.innerHTML = `
+    <div class="xgrid">
+      <div class="hcard" id="secSettings"><div class="t"><span>设置</span></div><div style="padding:12px 14px">
+        <div class="kv"><span>单笔买入上限(BNB,0 = 不限)</span><b><input id="xMax" class="xin" inputmode="decimal" value="${xSettings?.maxBuyBnb ?? 0}"></b></div>
+        <div class="faint" style="font-size:11px;margin:-2px 0 8px">超过就拒绝下单;按比例买时按报价花费算</div>
+        <div class="xat">
+          <div class="kv"><span>发射后自动转出到</span><b class="mono" style="font-size:11px;word-break:break-all;text-align:right">${at?.to ? esc(at.to) : '<span class="faint">没设(功能关闭)</span>'}</b></div>
+          <div class="faint" style="font-size:11px;margin:-2px 0 6px">${at?.to ? `已开启 ${Object.values(at.tokens ?? {}).filter((t) => t.on).length} 个币;改地址会把这些开关全部关掉,要重新打开` : "设好后,在代币的「我的仓位」里逐个打开"}</div>
+          <div id="xAtEdit" hidden>
+            <input id="xAt1" class="xaddr" placeholder="新地址 0x…(必须是你自己的)" spellcheck="false">
+            <input id="xAt2" class="xaddr" placeholder="再输一遍确认" spellcheck="false">
+            <div style="display:flex;gap:6px;margin-top:6px"><button class="hbtn on" id="xAtSave">保存</button><button class="hbtn" id="xAtCancel">取消</button>${at?.to ? '<button class="hbtn bad" id="xAtClear" style="margin-left:auto">清空(关闭功能)</button>' : ""}</div>
+          </div>
+          <button class="hbtn" id="xAtBtn">${at?.to ? "修改地址" : "设置地址"}</button>
+          <label class="sw" style="margin-top:8px"><span>被标中风险时去 Binance App 确认<div class="faint" style="font-size:11px">币安常把内盘币合约标成「中风险」,不开会被直接拦下;开了就提交并推 TG,你在 App 里 5 分钟内确认。高风险照样拦</div></span><input type="checkbox" id="xAtApp" ${at?.appConfirm ? "checked" : ""}><i></i></label>
+        </div>
+        <label class="sw"><span>Flap 内盘 开盘后自动领取份额<div class="faint" style="font-size:11px">只把自己的份额领成代币,不转走;结果推 TG</div></span><input type="checkbox" id="xClaim" ${xSettings?.autoClaim ? "checked" : ""}><i></i></label>
+      </div></div>
+      <div class="hcard" id="secQuotes"><div class="t"><span>底池币余额(内盘卖出后剩下的)</span><button class="icbtn" id="xQRef">↻</button></div>
+        ${quotes.length ? `<table class="num"><tbody>${quotes.map((q) => `<tr><td>账号 ${q.acct}</td><td><b>${esc(q.symbol)}</b></td><td>${num(q.amount)}</td><td class="mute">${q.usd !== null ? "$" + num(q.usd, 2) : "—"}</td><td><button class="hbtn" data-q2b="${esc(q.ca)}" data-acct="${q.acct}" data-sym="${esc(q.symbol)}">换回 BNB</button></td></tr>`).join("")}</tbody></table>` : '<div class="empty" style="padding:20px">没有(超过 0.5 美元的)底池币</div>'}
+      </div>
+    </div>
+    <div class="hcard" id="secApprovals"><div class="t"><span>授权管理(币安钱包列出 + 链上实际额度核对)</span><button class="icbtn" id="xARef">↻</button></div>
+      ${xApprovals?.length ? `<table class="num"><thead><tr><th>账号</th><th>代币</th><th>授权给</th><th>链上额度</th><th></th></tr></thead><tbody>${xApprovals.map((a) => `<tr><td>${a.acct}</td><td><b>${esc(a.symbol)}</b> <span class="faint mono">${esc(short(a.token))}</span></td><td class="mono">${esc(a.spenderName || short(a.spender))}</td><td>${a.onchain === null ? "—" : a.unlimited ? '<span class="down">无限</span>' : num(a.onchain)}${a.onchain !== null && a.listed !== null && Math.abs(a.onchain - a.listed) > 1e-9 ? ' <span class="faint">(列表 ' + num(a.listed) + ")</span>" : ""}</td><td>${a.onchain === 0 ? '<span class="faint">已是 0</span>' : `<button class="hbtn bad" data-rv="${a.acct}|${esc(a.token)}|${esc(a.spender)}|${esc(a.type || "approve")}|${esc(a.symbol)}">撤销</button>`}</td></tr>`).join("")}</tbody></table>` : `<div class="empty" style="padding:20px">${xApprovals ? "没有未用完的授权" : "读取中…"}</div>`}
+    </div>
+    <div class="hcard"><div class="t"><span>下单耗时(最近 7 天,从服务器收到到脚本结束)</span></div>
+      ${xLatency?.length ? `<table class="num"><thead><tr><th>平台 · 方向</th><th>次数</th><th>成功</th><th>中位数</th><th>最慢 10%</th><th>到预览</th><th>到提交</th></tr></thead><tbody>${xLatency.map((l) => `<tr><td>${esc(l.key)}</td><td>${l.n}</td><td>${l.ok}</td><td>${l.p50 ? (l.p50 / 1000).toFixed(1) + "s" : "—"}</td><td>${l.p90 ? (l.p90 / 1000).toFixed(1) + "s" : "—"}</td><td class="mute">${l.avgPreview ? (l.avgPreview / 1000).toFixed(1) + "s" : "—"}</td><td class="mute">${l.avgSubmit ? (l.avgSubmit / 1000).toFixed(1) + "s" : "—"}</td></tr>`).join("")}</tbody></table>` : '<div class="empty" style="padding:20px">还没有记录(从现在开始每一单都会记)</div>'}
+    </div>`;
+  $("xMax").onchange = async () => {
+    try { const r = await post("/api/settings/set", { maxBuyBnb: $("xMax").value.trim() || 0 }); const d = await r.json(); if (!r.ok) throw new Error(d.error); xSettings = d; toast(d.maxBuyBnb > 0 ? `单笔上限 ${d.maxBuyBnb} BNB` : "单笔上限已取消", "ok"); }
+    catch (e) { toast(e.message, "err"); $("xMax").value = xSettings?.maxBuyBnb ?? 0; }
+  };
+  $("xClaim").onchange = async () => {
+    const on = $("xClaim").checked;
+    if (on && !(await askConfirm("开启 Flap 内盘 自动领取?", "开盘后后台每 30 秒检查一次,两个号有份额就自动 Portal.claim 领成代币(只领自己的,不转走),每次领取都会发一笔交易。"))) { $("xClaim").checked = false; return; }
+    try { const r = await post("/api/settings/set", { autoClaim: on }); xSettings = await r.json(); toast(on ? "已开启自动领取" : "已关闭自动领取", "ok"); } catch (e) { toast(e.message, "err"); }
+  };
+  $("xAtBtn").onclick = () => { $("xAtEdit").hidden = false; $("xAtBtn").hidden = true; $("xAt1").focus(); };
+  $("xAtCancel").onclick = () => renderExtras();
+  $("xAtApp").onchange = async (e) => {
+    const on = e.target.checked;
+    if (on && !(await askConfirm("开启「中风险去 App 确认」?", "币安标成中风险的自动转出也会提交,每次都需要你在 Binance App 里手动确认(5 分钟内),不确认就不会转。高风险照样拦。"))) { e.target.checked = false; return; }
+    try { const r = await post("/api/autotransfer/appconfirm", { on }); const d = await r.json(); if (!r.ok) throw new Error(d.error); at = { ...at, appConfirm: d.appConfirm }; toast(on ? "已开启" : "已关闭", "ok"); }
+    catch (err) { e.target.checked = !on; toast("设置失败:" + err.message, "err"); }
+  };
+  const saveAt = async (to, to2) => {
+    const clear = !to;
+    const n = Object.values(at?.tokens ?? {}).filter((t) => t.on).length;
+    const ok = await askConfirm(clear ? "清空自动转出地址?" : "设置自动转出地址?", clear ? "清空后「发射后自动转出」功能关闭,所有开关都打不开。" :
+      `发射后会把代币全部转到:\n${to}\n\n请确认这是你自己的地址(转出无法撤回)。${n ? `\n已开启的 ${n} 个开关会被关掉,需要重新打开。` : ""}\n改动会推送到 TG。`);
+    if (!ok) return;
+    try { const r = await post("/api/autotransfer/target", { to, to2 }); const d = await r.json(); if (!r.ok) throw new Error(d.error); toast(clear ? "已清空" : "已保存", "ok"); }
+    catch (e) { toast(e.message, "err"); return; }
+    at = await post("/api/autotransfer", {}).then((r) => r.json()).catch(() => at); renderExtras(); if (cur) renderPos();
+  };
+  $("xAtSave").onclick = () => {
+    const a = $("xAt1").value.trim(), b = $("xAt2").value.trim();
+    if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return toast("地址格式不对", "err");
+    if (a.toLowerCase() !== b.toLowerCase()) return toast("两次输入的地址不一致", "err");
+    saveAt(a, b);
+  };
+  $("xAtClear")?.addEventListener("click", () => saveAt("", ""));
+  $("xQRef").onclick = async () => { xQuotes = await post("/api/quote-balances", {}).then((r) => r.json()).catch(() => xQuotes); renderExtras(); };
+  $("xARef").onclick = async () => { xApprovals = null; renderExtras(); xApprovals = await post("/api/approvals", {}).then((r) => r.json()).catch(() => []); renderExtras(); };
+  box.querySelectorAll("[data-q2b]").forEach((b) => (b.onclick = async () => { await load(b.dataset.q2b); if (cur) order("sell", "100", b.dataset.acct); }));
+  box.querySelectorAll("[data-rv]").forEach((b) => (b.onclick = async () => {
+    const [acct, token, spender, type, sym] = b.dataset.rv.split("|");
+    if (!(await askConfirm(`撤销 账号${acct} 的 ${sym} 授权?`, `把 ${sym} 对 ${spender} 的授权额度改成 0。\n会发一笔交易(花一点 gas)。`))) return;
+    b.disabled = true; b.textContent = "撤销中…";
+    try { const r = await post("/api/approvals/revoke", { acct, token, spender, type }); const d = await r.json(); if (!r.ok) throw new Error(d.error); toast(`已提交撤销 ${sym}${d?.txHash ? " · " + short(d.txHash) : ""}`, "ok"); }
+    catch (e) { toast(e.message, "err"); }
+    setTimeout(async () => { xApprovals = await post("/api/approvals", {}).then((r) => r.json()).catch(() => xApprovals); renderExtras(); }, 6000);
+  }));
+}
+
+// ---------- 一键买卖浮窗(P1/P2/P3 预设,可拖动) ----------
+const QB_DEFAULT = { buy: [["0.01", "0.05", "0.1", "0.2", "0.3", "0.5"], ["0.02", "0.1", "0.2", "0.5", "1", "2"], ["0.005", "0.01", "0.02", "0.03", "0.05", "0.1"]], sell: [["10", "25", "50", "75", "100", "33"], ["5", "15", "35", "50", "70", "100"], ["20", "40", "60", "80", "100", "50"]] };
+let qb = { on: false, p: 0, x: null, y: null, edit: false, presets: QB_DEFAULT };
+try { qb = { ...qb, ...JSON.parse(localStorage.getItem("qbPanel") || "{}") }; } catch {}
+const saveQb = () => { try { localStorage.setItem("qbPanel", JSON.stringify({ on: qb.on, p: qb.p, x: qb.x, y: qb.y, presets: qb.presets })); } catch {} };
+function renderQb() {
+  let el = $("qbPanel");
+  if (!qb.on || !cur) { el?.remove(); return; }
+  if (!el) { el = document.createElement("div"); el.id = "qbPanel"; el.className = "qbp"; document.body.appendChild(el); }
+  const c = caps(), P = qb.p, unit = unitOf(cur.quote);
+  const pctOnly = c.pct && !c.bnb;
+  el.innerHTML = `<div class="qbh" id="qbDrag"><b>⚡ 一键买卖</b><span class="faint">${esc(cur.symbol)}</span><span style="margin-left:auto;display:flex;gap:3px">${[0, 1, 2].map((i) => `<button class="${P === i ? "on" : ""}" data-p="${i}">P${i + 1}</button>`).join("")}<button data-act="edit" title="编辑预设">${qb.edit ? "完成" : "✎"}</button><button data-act="close" title="关闭">✕</button></span></div>
+    <div class="qbl"><span class="up">买入</span><span class="faint">${pctOnly ? "按比例" : "BNB"} · ${ui.acct === "both" ? "两个号" : "账号 " + ui.acct}</span></div>
+    <div class="qbg">${pctOnly ? `<button class="qb buy" data-b="1pct">1%</button><button class="qb buy" data-b="half">0.5%</button>` : qb.presets.buy[P].map((v, i) => qb.edit ? `<input class="qbe" data-eb="${i}" value="${esc(v)}">` : `<button class="qb buy" data-b="${esc(v)}">${esc(v)}</button>`).join("")}</div>
+    <div class="qbl"><span class="down">卖出</span><span class="faint">持仓 %</span></div>
+    <div class="qbg">${qb.presets.sell[P].map((v, i) => qb.edit ? `<input class="qbe" data-es="${i}" value="${esc(v)}">` : `<button class="qb sell" data-s="${esc(v)}">${v === "100" ? "清仓" : esc(v) + "%"}</button>`).join("")}</div>
+    <div class="faint" style="font-size:11px;margin-top:6px">${$("oneClick").checked ? "一键交易已开:点了直接下单" : "点了会先弹确认"} · 滑点 ${ui.slip ? ui.slip + "%" : "默认"}</div>`;
+  if (qb.x !== null) { el.style.left = Math.min(window.innerWidth - 60, Math.max(0, qb.x)) + "px"; el.style.top = Math.min(window.innerHeight - 40, Math.max(0, qb.y)) + "px"; el.style.right = "auto"; }
+  el.querySelectorAll("[data-p]").forEach((b) => (b.onclick = () => { qb.p = Number(b.dataset.p); saveQb(); renderQb(); }));
+  el.querySelector('[data-act="close"]').onclick = () => { qb.on = false; saveQb(); renderQb(); markQbBtn(); };
+  el.querySelector('[data-act="edit"]').onclick = () => {
+    if (qb.edit) {
+      // 保存:BNB 金额 0–5,卖出 1–100 的整数,不合法的保留原值
+      el.querySelectorAll("[data-eb]").forEach((i) => { const v = i.value.trim(); if (/^\d+(\.\d{1,8})?$/.test(v) && Number(v) > 0 && Number(v) <= 5) qb.presets.buy[P][Number(i.dataset.eb)] = v; });
+      el.querySelectorAll("[data-es]").forEach((i) => { const v = i.value.trim(); if (/^\d{1,3}$/.test(v) && Number(v) >= 1 && Number(v) <= 100) qb.presets.sell[P][Number(i.dataset.es)] = v; });
+      saveQb();
+    }
+    qb.edit = !qb.edit; renderQb();
+  };
+  el.querySelectorAll("[data-b]").forEach((b) => (b.onclick = () => order("buy", b.dataset.b)));
+  el.querySelectorAll("[data-s]").forEach((b) => (b.onclick = () => order("sell", b.dataset.s)));
+  // 拖动
+  const h = $("qbDrag");
+  h.onmousedown = (e) => {
+    if (e.target.closest("button")) return;
+    const r = el.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+    const mv = (ev) => { qb.x = ev.clientX - dx; qb.y = ev.clientY - dy; el.style.left = qb.x + "px"; el.style.top = qb.y + "px"; el.style.right = "auto"; };
+    const up = () => { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); saveQb(); };
+    document.addEventListener("mousemove", mv); document.addEventListener("mouseup", up);
+  };
+}
+function markQbBtn() { const b = $("qbTog"); if (b) b.classList.toggle("on", qb.on); }
+
+// ---------- 交易区 ----------
+function caps() {
+  const d = cur, inner = d?.stage === "inner";
+  return { pct: !!d && inner && ["four", "gangv1", "gangv2"].includes(d.platform), bnb: !!d && (!inner || ["four", "idagent", "dex"].includes(d.platform)) };
+}
+const SLIPS = ["", "3", "5", "10", "20", "35"];
+try { ui.slip = localStorage.getItem("slip") ?? ""; } catch { ui.slip = ""; }
+// 各脚本自己的默认滑点(不选时用)
+function defaultSlip(action = ui.side) {
+  const d = cur; if (!d) return null;
+  if (d.stage !== "inner" || d.platform === "dex") return 10;
+  if (d.platform?.startsWith("gang")) return action === "sell" ? 5 : 1;
+  return d.platform === "four" && action === "sell" ? 10 : 30;
+}
+function renderSlip() {
+  const custom = ui.slip && !SLIPS.includes(ui.slip);
+  $("slipSeg").innerHTML = SLIPS.map((v) => `<button data-s="${v}" class="${v === ui.slip ? "on" : ""}">${v ? v + "%" : "默认"}</button>`).join("") +
+    `<input id="slipIn" inputmode="decimal" placeholder="自定义" class="${custom ? "on" : ""}" value="${custom ? esc(ui.slip) : ""}">`;
+  document.querySelectorAll("#slipSeg button").forEach((b) => (b.onclick = () => setSlip(b.dataset.s)));
+  $("slipIn").onchange = () => { const v = $("slipIn").value.trim().replace("%", ""); if (v === "" || (Number(v) > 0 && Number(v) <= 50)) setSlip(v ? String(Number(v)) : ""); else { toast("滑点要在 0–50% 之间", "err"); renderSlip(); } };
+  const ds = defaultSlip();
+  $("slipInfo").textContent = ui.slip ? `本单 ${ui.slip}%` : ds ? `默认 = ${ds}%` : "";
+}
+function setSlip(v) { ui.slip = v; try { localStorage.setItem("slip", v); } catch {} renderSlip(); schedulePreview(); }
+const effSlip = (action) => (ui.slip ? Number(ui.slip) : defaultSlip(action));
+
+function renderTrade() {
+  // 账号切换只列本机已登录的号
+  const on = connected();
+  if (on.length && !(ui.acct === "both" ? on.length > 1 : on.includes(ui.acct))) ui.acct = on[0];
+  const opts = [...on.map((k) => [k, "账号 " + k]), ...(on.length > 1 ? [["both", "两个号"]] : [])];
+  $("acctSeg").innerHTML = opts.map(([v, l]) => `<button data-v="${v}" class="${v === ui.acct ? "on" : ""}">${l}</button>`).join("") || "<button disabled>没有已登录的账号</button>";
+  document.querySelectorAll("#acctSeg button[data-v]").forEach((b) => (b.onclick = () => { ui.acct = b.dataset.v; try { localStorage.setItem("acct", ui.acct); } catch {} renderTrade(); schedulePreview(); }));
+  document.querySelectorAll(".side-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.v === ui.side));
+  $("buyBox").hidden = ui.side !== "buy"; $("sellBox").hidden = ui.side !== "sell";
+  const c = caps(), d = cur, unit = unitOf(d?.quote), dis = !d || running || !connected().length;
+  $("pctGrp").hidden = d ? !c.pct : true;
+  $("bnbGrp").hidden = d ? !c.bnb : false;
+  $("pctBtns").innerHTML = [["1pct", "1%", d?.cost1pct, '<kbd class="k">空格+W</kbd>'], ["half", "0.5%", d?.costHalfPct, ""]].map(([a, l, cost, k]) => `<button class="q" data-a="buy" data-arg="${a}" ${dis ? "disabled" : ""}>${l}${k}<small>${cost ? "≈ " + num(cost) + " " + esc(unit) : "按代币数量"}</small></button>`).join("");
+  $("bnbBtns").innerHTML = BNB_PRESETS.map((v) => `<button class="q" data-a="buy" data-arg="${v}" ${dis ? "disabled" : ""}>${v}</button>`).join("");
+  $("sellBtns").innerHTML = SELL_PRESETS.map((v) => `<button class="q" data-a="sell" data-arg="${v}" ${dis ? "disabled" : ""}>${v === "100" ? '清仓<kbd class="k">空格+F</kbd>' : v + "%"}</button>`).join("");
+  $("bnbGo").disabled = dis; $("pctGo").disabled = dis;
+  document.querySelectorAll(".q[data-a]").forEach((b) => (b.onclick = () => order(b.dataset.a, b.dataset.arg)));
+  const inner = d?.stage === "inner", gang = d?.platform?.startsWith("gang");
+  $("appSw").hidden = !(ui.side === "sell" && inner && gang);
+  $("hint").textContent = !d ? "先在上面粘贴一个 CA" : ui.side === "sell"
+    ? (inner && gang ? "Gang 内盘卖出会被币安钱包风控标记;不打开上面的开关就不会提交。" : !inner ? "外盘:用币安钱包兑换卖成 BNB。" : "内盘卖回曲线,会先精确授权要卖的数量。")
+    : !inner ? "外盘:用币安钱包兑换买入。"
+    : d.platform === "four" ? "four.meme:超过 1% 会自动卡在上限,多付的退回。"
+    : gang ? `Gang:按代币数量买${d.platform === "gangv2" ? ",先用 BNB 换 " + unit + "、精确授权再买" : ",直接用 BNB,多付的退回"}。毕业前卖出会被钱包风控标记。`
+    : d.platform === "idagent" ? "Flap 内盘:按 BNB 买。" : "";
+  renderSlip(); if ($("qbPanel")) renderQb();
+  // 余额 / 持仓提示
+  if (wallets) {
+    const a = wallets.accounts;
+    $("bal").textContent = ui.acct === "both" ? a.map((x) => `${x.acct}:${x.bnb?.toFixed(3) ?? "—"}`).join("  ") : `余额 ${a.find((x) => x.acct === ui.acct)?.bnb?.toFixed(4) ?? "—"}`;
+  }
+  if (d) {
+    const hs = ui.acct === "both" ? Object.keys(d.holdings) : [ui.acct];
+    $("holdHint").textContent = hs.map((k) => { const h = d.holdings[k]; return (hs.length > 1 ? k + ":" : "持有 ") + (h?.shares !== undefined ? num(h.shares) + " 份" : num(h?.tokens ?? 0)); }).join("  ");
+    renderPos();
+  }
+}
+// 我的仓位:每个号一块,带盈亏、累计买入 / 卖回、快速卖出和「回本」
+// ---------- 发射后自动转出 ----------
+let at = null;
+async function loadAT() {
+  try { const r = await post("/api/autotransfer", {}); if (r.ok) at = await r.json(); } catch {}
+  if (cur) renderPos();
+}
+function atHtml() {
+  if (!at) return "";
+  if (!at.to) return '<div class="atbox faint">发射后自动转出:还没设目标地址 —— 点左上角「内盘终端」回到账户总览,在「设置」里填</div>';
+  const t = at.tokens?.[cur.ca.toLowerCase()], on = !!t?.on;
+  const done = Object.entries(t?.done ?? {});
+  let st = !on ? "关闭" : "";
+  if (on) {
+    st = done.length ? done.map(([a, x]) => `账号${a} ${x.tx ? `已转出 ${esc(x.amount ?? "")} 个 <a href="https://bscscan.com/tx/${esc(x.tx)}" target="_blank" rel="noopener">tx ↗</a>` : esc(x.note ?? "已处理")}`).join(" · ") : "";
+    if (cur.stage === "inner") st = (st ? st + " · " : "") + "等待发射(后台每 15 秒检查,两个号都转)";
+    else if (!done.length) st = "已发射,正在转出…";
+    if (t.lastError) st += `<div class="down">${esc(t.lastError)}</div>`;
+  }
+  return `<div class="atbox ${on ? "on" : ""}"><label class="sw"><span>发射后自动转出全部 → <span class="mono">${esc(short(at.to))}</span></span><input type="checkbox" id="atOn" ${on ? "checked" : ""}><i></i></label><div class="st">${st}</div></div>`;
+}
+async function toggleAT(on) {
+  const sym = cur.symbol;
+  if (on) {
+    const ok = await askConfirm(`开启自动转出:${sym}`, `检测到发射(毕业 / 开盘)后,自动把已登录的每个号里的全部 ${sym} 转到:
+${at.to}
+
+转完推 TG。地址在账户总览的「设置」里改。${cur.stage === "outer" ? "\n\n⚠️ 这个币已经发射了,开启后 15 秒内就会转出。" : ""}`);
+    if (!ok) { renderPos(); return; }
+  }
+  try {
+    const r = await post("/api/autotransfer/set", { ca: cur.ca, on });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error);
+    toast(on ? `已开启:${sym} 发射后自动转出` : `已关闭 ${sym} 的自动转出`, "ok");
+  } catch (e) { toast(e.message, "err"); }
+  loadAT();
+}
+function renderPos() {
+  const d = cur, unit = unitOf(d.quote), dis = running;
+  const ks = Object.keys(d.holdings).filter((k) => (d.holdings[k].tokens || d.holdings[k].shares) > 0);
+  $("posBox").hidden = false;
+  $("posUnit").textContent = ks.length ? `单位 ${unit}` : "";
+  const bindAT = () => { const x = $("atOn"); if (x) x.onchange = () => toggleAT(x.checked); };
+  if (!ks.length) { $("posMini").innerHTML = atHtml() + '<div class="faint" style="font-size:12px">这个币还没有持仓</div>'; bindAT(); return; }
+  $("posMini").innerHTML = atHtml() + ks.map((k) => {
+    const h = d.holdings[k], c = d.costs?.[k], p = pnlOf(k);
+    let rb = "", rbDis = true, rbPct = null;
+    if (p && p.net <= 0) rb = "已回本(卖回的已超过投入)";
+    else if (p && p.value > 0) {
+      const need = Math.ceil((p.net / p.value) * 100);
+      if (need >= 100) rb = `还没回本(全卖也差 ${num(p.net - p.value)})`;
+      else { rb = `回本:卖 ${need}% 收回成本`; rbDis = dis; }
+      rbPct = Math.max(1, need);
+    } else rb = h.value === undefined ? "外盘没有现值,算不了回本" : "没有买入记录,算不了回本";
+    return `<div class="acct"><div class="kv"><b>账号 ${k}</b><span class="num">${h.shares !== undefined ? num(h.shares) + " 份" : num(h.tokens) + " 个"}${h.pctOfSupply ? " · " + h.pctOfSupply + "%" : ""}</span></div>
+      <div class="big num">${p ? `<span class="${p.v >= 0 ? "up" : "down"}">${p.v >= 0 ? "+" : ""}${num(p.v)} <small>${p.v >= 0 ? "+" : ""}${p.p.toFixed(1)}%</small></span>` : '<span class="faint">盈亏 —</span>'}</div>
+      <div class="kv"><span>现值</span><b class="num">${h.value !== undefined && h.value !== null ? num(h.value) : "—"}</b></div>
+      <div class="kv"><span>累计买入 / 卖回</span><b class="num">${c ? num(c.invested ?? c.cost) + " / " + num(c.received || 0) : "—"}</b></div>
+      <div class="btns">${["25", "50", "75", "100"].map((v) => `<button data-sell="${v}" data-acct="${k}" ${dis ? "disabled" : ""}>${v === "100" ? "清仓" : v + "%"}</button>`).join("")}<button data-sell="10" data-acct="${k}" ${dis ? "disabled" : ""}>10%</button>
+        <button class="rb" ${rbDis ? "disabled" : `data-sell="${rbPct}" data-acct="${k}"`}>${rb}</button></div>
+      ${d.stage === "outer" && h.tokens > 0 ? `<button class="xferbtn" data-xfer="${k}" ${dis ? "disabled" : ""}>转出到地址…</button><div class="xferbox" id="xf${k}" hidden></div>` : ""}</div>`;
+  }).join("");
+  document.querySelectorAll("#posMini [data-sell]").forEach((b) => (b.onclick = () => order("sell", b.dataset.sell, b.dataset.acct)));
+  document.querySelectorAll("#posMini [data-xfer]").forEach((b) => (b.onclick = () => openXfer(b.dataset.xfer)));
+  bindAT();
+}
+// 代币页「转出到地址」:内盘币链上转不了(合约不让转 / Flap 内盘 只有份额),只在外盘显示。
+//   后端和账户总览的转账卡片一样(/api/send → transfer.mjs,先 preview);「需要时去 App 确认」默认打开:
+//   被币安标中风险、或者钱包设置要求这笔去 App 批准时,照样提交,你在 App 里批准。
+function openXfer(acct) {
+  const box = $("xf" + acct); if (!box) return;
+  if (!box.hidden) { box.hidden = true; return; }
+  const h = cur.holdings[acct], mine = wallets?.accounts ?? [];
+  const picks = [...(at?.to ? [["自动转出地址", at.to]] : []), ...mine.filter((a) => a.acct !== acct).map((a) => [`账号 ${a.acct}`, a.address]),
+    ...sndRecent().filter((x) => x.toLowerCase() !== (at?.to ?? "").toLowerCase() && !mine.some((a) => a.address.toLowerCase() === x.toLowerCase())).slice(0, 2).map((x) => [short(x), x])];
+  const def = picks[0]?.[1] ?? "";
+  box.hidden = false;
+  box.innerHTML = `<input class="xaddr" id="xfTo${acct}" placeholder="收款地址 0x…" spellcheck="false" value="${esc(def)}">
+    ${picks.length ? `<div class="xfpicks">${picks.map(([n, a]) => `<button data-to="${esc(a)}" title="${esc(a)}">${esc(n)}</button>`).join("")}</div>` : ""}
+    <div class="xfpicks" id="xfAmt${acct}">${[["max", "全部"], ["50", "50%"], ["25", "25%"]].map(([v, n], i) => `<button data-amt="${v}" class="${i === 0 ? "on" : ""}">${n}</button>`).join("")}<span class="faint" style="margin-left:auto">持有 ${num(h.tokens)}</span></div>
+    <label class="sw" style="margin:6px 0"><span style="font-size:12px">需要时去 Binance App 确认<div class="faint" style="font-size:11px">被标中风险、或钱包要求这笔去 App 批准时照样提交,你在 App 里批准</div></span><input type="checkbox" id="xfApp${acct}" ${snd.app ? "checked" : ""}><i></i></label>
+    <button class="btn-acc" id="xfGo${acct}" style="margin-top:0;padding:7px 18px;width:100%">转出</button>
+    <pre class="sndlog" id="xfLog${acct}" hidden></pre>`;
+  let amt = "max";
+  box.querySelectorAll("[data-to]").forEach((b) => (b.onclick = () => ($("xfTo" + acct).value = b.dataset.to)));
+  box.querySelectorAll("[data-amt]").forEach((b) => (b.onclick = () => { amt = b.dataset.amt; box.querySelectorAll("[data-amt]").forEach((x) => x.classList.toggle("on", x === b)); }));
+  $("xfGo" + acct).onclick = async () => {
+    const to = $("xfTo" + acct).value.trim(), from = mine.find((a) => a.acct === acct);
+    if (!/^0x[0-9a-fA-F]{40}$/.test(to)) return toast("收款地址格式不对", "err");
+    if (from && to.toLowerCase() === from.address.toLowerCase()) return toast("收款地址就是这个账号自己", "err");
+    const amount = amt === "max" ? "max" : String(Math.floor(h.tokens * Number(amt) / 100 * 1e6) / 1e6);
+    const app = $("xfApp" + acct).checked, known = mine.find((a) => a.address.toLowerCase() === to.toLowerCase());
+    if (!(await askConfirm(`转出 ${amt === "max" ? "全部" : amt + "%"} ${cur.symbol}?`,
+      `从 账号 ${acct}${from ? "(" + from.address + ")" : ""}\n到 ${to}${known ? `(你的账号 ${known.acct})` : at?.to && at.to.toLowerCase() === to.toLowerCase() ? "(自动转出地址)" : "\n⚠️ 这个地址不是你在面板里的账号,请逐字核对"}\n\n数量:${amount === "max" ? num(h.tokens) + "(全部)" : amount} ${cur.symbol}\n代币:${cur.ca}${app ? "\n需要时会提交去 App 确认,请留意 Binance App" : ""}\n转出无法撤回。`))) return;
+    const pre = $("xfLog" + acct), btn = $("xfGo" + acct);
+    pre.hidden = false; pre.textContent = ""; btn.disabled = true; btn.textContent = "转出中…";
+    const line = (l) => { pre.textContent += (pre.textContent ? "\n" : "") + l; pre.scrollTop = 1e9; if (/⏳/.test(l)) toast("请打开 Binance App 批准这笔转出(5 分钟内)", "ok"); };
+    let failed = false;
+    try {
+      const r = await post("/api/send", { acct, token: cur.ca, amount, to, appConfirm: app });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || r.status); }
+      const reader = r.body.getReader(), dec = new TextDecoder(); let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read(); if (done) break;
+        buf += dec.decode(value, { stream: true }); let i;
+        while ((i = buf.indexOf("\n")) >= 0) { const l = buf.slice(0, i); buf = buf.slice(i + 1); if (l.startsWith("__DONE__")) failed = l.trim() !== "__DONE__ 0"; else line(l); }
+      }
+    } catch (e) { failed = true; line("✗ " + e.message); }
+    btn.disabled = false; btn.textContent = "转出";
+    if (!failed) { try { localStorage.setItem("sendRecent", JSON.stringify([to, ...sndRecent().filter((x) => x.toLowerCase() !== to.toLowerCase())].slice(0, 5))); } catch {} }
+    toast(failed ? "转出失败,看下面的记录" : `${cur.symbol} 已转出`, failed ? "err" : "ok");
+    load(cur.ca, { quiet: true }); loadWallets(true);
+  };
+}
+
+// ---------- 下单前报价 ----------
+async function fetchQuote(action, arg, acct) {
+  const r = await post("/api/quote", { ca: cur.ca, action, acct, arg, slip: effSlip(action) });
+  const d = await r.json(); if (!r.ok) throw new Error(d.error); return d;
+}
+function quoteHtml(q) {
+  if (!q) return "";
+  if (q.get === undefined) return `<div class="faint">${esc(q.note ?? "")}</div>`;
+  return `<div class="kv"><span>预计获得</span><b class="num">${num(q.get)} ${esc(q.getUnit ?? "")}</b></div>
+    <div class="kv"><span>最少获得(滑点 ${q.slip}%)</span><b class="num">${q.min !== null && q.min !== undefined ? num(q.min) + " " + esc(q.getUnit ?? "") : "—"}</b></div>
+    ${q.fee !== null && q.fee !== undefined ? `<div class="kv"><span>手续费</span><b class="num">${num(q.fee)} ${esc(q.feeUnit ?? "")}</b></div>` : ""}
+    ${q.note ? `<div class="faint" style="margin-top:2px">${esc(q.note)}</div>` : ""}`;
+}
+// 自定义 BNB 数量:边输边报价
+let prevTimer = null, prevSeq = 0;
+function schedulePreview() {
+  clearTimeout(prevTimer);
+  const v = $("bnb").value.trim();
+  if (!cur || ui.side !== "buy" || !(Number(v) > 0) || $("bnbGrp").hidden) { $("qprev").hidden = true; return; }
+  prevTimer = setTimeout(async () => {
+    const seq = ++prevSeq;
+    $("qprev").hidden = false; $("qprev").innerHTML = '<div class="faint">报价中…</div>';
+    const q = await fetchQuote("buy", v, ui.acct === "both" ? connected()[0] : ui.acct).catch((e) => ({ note: "报价失败:" + e.message }));
+    if (seq === prevSeq) $("qprev").innerHTML = quoteHtml(q);
+  }, 450);
+}
+
+function askConfirm(title, body, extraHtml = "") {
+  return new Promise((resolve) => {
+    $("cfT").textContent = title; $("cfB").textContent = body; $("confirm").hidden = false;
+    let qx = $("cfQ"); if (!qx) { qx = document.createElement("div"); qx.id = "cfQ"; qx.className = "qrows"; $("cfB").after(qx); }
+    qx.innerHTML = extraHtml; qx.hidden = !extraHtml;
+    pendingConfirm = (v) => { $("confirm").hidden = true; pendingConfirm = null; resolve(v); };
+    $("cfYes").onclick = () => pendingConfirm(true); $("cfNo").onclick = () => pendingConfirm(false);
+    // 不把焦点放到「确认」上:快捷键是按住空格触发的,松开空格会点中有焦点的按钮。确认用回车或鼠标
+    document.activeElement?.blur?.();
+  });
+}
+async function order(action, arg, acctOverride) {
+  if (!cur || running || pendingConfirm) return;   // 确认框开着时不叠第二单
+  if (action === "buy" && !["1pct", "half"].includes(arg) && !/^p\d+(\.\d{1,4})?$/.test(arg) && !(/^\d+(\.\d{1,8})?$/.test(arg) && Number(arg) > 0)) { toast("BNB 数量不对", "err"); return; }
+  const acct = acctOverride ?? ui.acct;
+  const who = acct === "both" ? "两个号" : "账号 " + acct;
+  const what = action === "buy" ? (arg === "1pct" ? "买 1%" : arg === "half" ? "买 0.5%" : arg.startsWith("p") ? `买 ${arg.slice(1)}%` : `买 ${arg} BNB`) : arg === "100" ? "清仓" : `卖出 ${arg}%`;
+  const appConfirm = action === "sell" && cur.stage === "inner" && cur.platform?.startsWith("gang") && $("appConfirm").checked;
+  const slip = effSlip(action);
+  const title = `${who} ${what} ${cur.symbol}`;
+  if (!$("oneClick").checked) {
+    const qAcct = acct === "both" ? connected()[0] : acct;
+    const p = askConfirm(title, `${cur.platformLabel} · ${cur.stage === "inner" ? "内盘" : "外盘"} · 滑点 ${slip ?? "默认"}%${acct === "both" ? "(报价按账号 " + qAcct + ")" : ""}${appConfirm ? "\n已打开:需要时去 Binance App 确认" : ""}`, '<div class="faint">报价中…</div>');
+    fetchQuote(action, arg, qAcct).then((q) => { if (pendingConfirm && $("cfQ")) $("cfQ").innerHTML = quoteHtml(q); }).catch((e) => { if ($("cfQ")) $("cfQ").innerHTML = `<div class="faint">报价失败:${esc(e.message)}</div>`; });
+    if (!(await p)) return;
+  }
+  running = true; renderTrade();
+  $("order").hidden = false; $("ordT").textContent = title; $("ordS").className = "chipst run"; $("ordS").textContent = "执行中"; $("ordL").innerHTML = "";
+  log(`—— ${title} ——`, "sep");
+  toast("已提交:" + title);
+  let failed = false;
+  const line = (t) => {
+    const cls = /✗|✘|失败|REVERT/.test(t) ? "err" : /✓|✔|成交|成功/.test(t) ? "ok" : "";
+    if (cls === "err") failed = true;
+    log(t, cls);
+    const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = t;
+    $("ordL").appendChild(d); $("ordL").scrollTop = $("ordL").scrollHeight;
+  };
+  try {
+    const r = await post("/api/run", { ca: cur.ca, action, acct, arg, appConfirm, slip: ui.slip ? Number(ui.slip) : undefined, clientTs: Date.now() });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || r.status); }
+    const reader = r.body.getReader(), dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true }); let i;
+      while ((i = buf.indexOf("\n")) >= 0) { const l = buf.slice(0, i); buf = buf.slice(i + 1); if (l.startsWith("__DONE__")) { if (l.trim() !== "__DONE__ 0") failed = true; } else line(l); }
+    }
+  } catch (e) { failed = true; line("✗ " + e.message); }
+  running = false;
+  $("ordS").className = "chipst " + (failed ? "err" : "ok"); $("ordS").textContent = failed ? "失败" : "完成";
+  toast((failed ? "失败:" : "完成:") + title, failed ? "err" : "ok");
+  renderTrade();
+  load(cur.ca, { quiet: true }); loadTrades(); loadWallets(true);
+}
+
+// ---------- 转账(账户总览):BNB 走币安钱包 send,代币走 transfer.mjs(先 preview 风控) ----------
+const snd = { acct: null, token: "BNB", custom: "", customInfo: null, amount: "", to: "", app: true, running: false, log: [] };
+try { snd.app = localStorage.getItem("sendApp") !== "0"; } catch {}
+const sndRecent = () => { try { return JSON.parse(localStorage.getItem("sendRecent") || "[]"); } catch { return []; } };
+function sndBalance() {
+  const d = wallets; if (!d || !snd.acct) return null;
+  if (snd.token === "BNB") return d.accounts.find((a) => a.acct === snd.acct)?.bnb ?? null;
+  if (snd.token === "custom") return snd.customInfo?.holdings?.[snd.acct]?.tokens ?? null;
+  return d.tokens.find((t) => t.ca === snd.token)?.balances?.[snd.acct] ?? null;
+}
+function sndSymbol() {
+  if (snd.token === "BNB") return "BNB";
+  if (snd.token === "custom") return snd.customInfo?.symbol ?? "代币";
+  return wallets?.tokens.find((t) => t.ca === snd.token)?.symbol ?? "代币";
+}
+function renderSend(force = false) {
+  const box = $("sendBox"); if (!box || !wallets) return;
+  if (!force && box.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;   // 正在输入就别重画
+  const d = wallets;
+  if (!d.accounts.some((a) => a.acct === snd.acct)) snd.acct = d.accounts[0]?.acct ?? null;
+  if (!snd.acct) { box.innerHTML = ""; return; }
+  const held = d.tokens.filter((t) => t.balances?.[snd.acct] > 0);
+  if (snd.token !== "BNB" && snd.token !== "custom" && !held.some((t) => t.ca === snd.token)) snd.token = "BNB";
+  const bal = sndBalance(), sym = sndSymbol();
+  const picks = [
+    ...d.accounts.filter((a) => a.acct !== snd.acct).map((a) => [`账号 ${a.acct}`, a.address]),
+    ...(at?.to ? [["自动转出地址", at.to]] : []),
+    ...sndRecent().filter((x) => !d.accounts.some((a) => a.address.toLowerCase() === x.toLowerCase()) && x.toLowerCase() !== (at?.to ?? "").toLowerCase()).slice(0, 3).map((x) => [short(x), x]),
+  ];
+  box.innerHTML = `<div class="hcard"><div class="t"><span>转账</span><span>转出无法撤回,下面会再确认一次</span></div>
+    <div class="sendf">
+      <div class="row"><label>从</label><div class="segs">${d.accounts.map((a) => `<button data-sacct="${a.acct}" class="${a.acct === snd.acct ? "on" : ""}">账号 ${a.acct}</button>`).join("")}</div></div>
+      <div class="row"><label>资产</label><select id="sndTok">
+        <option value="BNB" ${snd.token === "BNB" ? "selected" : ""}>BNB</option>
+        ${held.map((t) => `<option value="${esc(t.ca)}" ${snd.token === t.ca ? "selected" : ""}>${esc(t.symbol ?? short(t.ca))} · ${num(t.balances[snd.acct])}</option>`).join("")}
+        <option value="custom" ${snd.token === "custom" ? "selected" : ""}>其他代币(粘贴 CA)…</option></select></div>
+      ${snd.token === "custom" ? `<div class="row"><label>CA</label><input id="sndCa" class="xaddr" style="margin:0" placeholder="0x…" spellcheck="false" value="${esc(snd.custom)}"><span class="faint" id="sndCaInfo">${snd.customInfo ? esc(snd.customInfo.symbol) : ""}</span></div>` : ""}
+      <div class="row"><label>数量</label><input id="sndAmt" class="xaddr" style="margin:0" inputmode="decimal" placeholder="${snd.amount === "max" ? "全部" : "0"}" value="${snd.amount === "max" ? "" : esc(snd.amount)}">
+        <div class="segs">${[25, 50, 100].map((p) => `<button data-spct="${p}" class="${p === 100 && snd.amount === "max" ? "on" : ""}">${p === 100 ? "全部" : p + "%"}</button>`).join("")}</div></div>
+      <div class="row sub"><label></label><span class="faint">可用 ${bal === null ? "—" : num(bal)} ${esc(sym)}${snd.amount === "max" ? ` · 将转出全部${snd.token === "BNB" ? "(自动扣掉 gas)" : ""}` : ""}</span></div>
+      <div class="row"><label>到</label><input id="sndTo" class="xaddr" style="margin:0" placeholder="收款地址 0x…" spellcheck="false" value="${esc(snd.to)}"></div>
+      ${picks.length ? `<div class="row sub"><label></label><div class="segs">${picks.map(([n, a]) => `<button data-sto="${esc(a)}" title="${esc(a)}" class="${snd.to.toLowerCase() === a.toLowerCase() ? "on" : ""}">${esc(n)}</button>`).join("")}</div></div>` : ""}
+      ${snd.token === "BNB" ? `<div class="row sub"><label></label><span class="faint">BNB 走币安钱包转账:收款地址要先加进 Binance App 的地址簿</span></div>`
+        : `<div class="row sub"><label></label><label class="sw" style="flex:1"><span>需要时去 Binance App 确认<div class="faint" style="font-size:11px">被币安标中风险、或钱包要求这笔去 App 批准时,照样提交,你在 App 里批准;不开会被直接拦下。高风险照样拦</div></span><input type="checkbox" id="sndApp" ${snd.app ? "checked" : ""}><i></i></label></div>`}
+      <div class="row"><label></label><button class="btn-acc" id="sndGo" style="margin-top:0;padding:8px 26px" ${snd.running ? "disabled" : ""}>${snd.running ? "转账中…" : "转账"}</button></div>
+      ${snd.log.length ? `<pre class="sndlog">${esc(snd.log.join("\n"))}</pre>` : ""}
+    </div></div>`;
+  box.querySelectorAll("[data-sacct]").forEach((b) => (b.onclick = () => { snd.acct = b.dataset.sacct; snd.amount = ""; renderSend(true); }));
+  $("sndTok").onchange = (e) => { snd.token = e.target.value; snd.amount = ""; renderSend(true); };
+  $("sndCa")?.addEventListener("input", async (e) => {
+    snd.custom = e.target.value.trim(); snd.customInfo = null; $("sndCaInfo").textContent = "";
+    if (!/^0x[0-9a-fA-F]{40}$/.test(snd.custom)) return;
+    $("sndCaInfo").textContent = "识别中…";
+    try { const r = await post("/api/inspect", { ca: snd.custom }); const j = await r.json(); if (!r.ok) throw new Error(j.error); snd.customInfo = j; } catch (err) { $("sndCaInfo").textContent = "识别失败:" + err.message; return; }
+    renderSend(true);
+  });
+  $("sndAmt").oninput = (e) => { snd.amount = e.target.value.trim(); box.querySelectorAll("[data-spct]").forEach((b) => b.classList.remove("on")); };
+  box.querySelectorAll("[data-spct]").forEach((b) => (b.onclick = () => {
+    const p = Number(b.dataset.spct), bl = sndBalance();
+    if (p === 100) snd.amount = "max";
+    else if (bl) snd.amount = String(Math.floor(bl * p / 100 * 1e6) / 1e6);
+    renderSend(true);
+  }));
+  $("sndTo").oninput = (e) => { snd.to = e.target.value.trim(); };
+  box.querySelectorAll("[data-sto]").forEach((b) => (b.onclick = () => { snd.to = b.dataset.sto; renderSend(true); }));
+  $("sndApp")?.addEventListener("change", (e) => { snd.app = e.target.checked; try { localStorage.setItem("sendApp", snd.app ? "1" : "0"); } catch {} });
+  $("sndGo").onclick = doSend;
+}
+async function doSend() {
+  if (snd.running) return;
+  const d = wallets, from = d.accounts.find((a) => a.acct === snd.acct);
+  const token = snd.token === "custom" ? snd.custom : snd.token;
+  if (snd.token === "custom" && !/^0x[0-9a-fA-F]{40}$/.test(token)) return toast("CA 格式不对", "err");
+  if (!/^0x[0-9a-fA-F]{40}$/.test(snd.to)) return toast("收款地址格式不对", "err");
+  if (snd.to.toLowerCase() === from.address.toLowerCase()) return toast("收款地址就是这个账号自己", "err");
+  if (snd.amount !== "max" && !(Number(snd.amount) > 0)) return toast("填一下数量", "err");
+  const bal = sndBalance();
+  if (snd.amount !== "max" && bal !== null && Number(snd.amount) > bal) return toast(`余额不够(可用 ${num(bal)})`, "err");
+  const sym = sndSymbol(), known = d.accounts.find((a) => a.address.toLowerCase() === snd.to.toLowerCase());
+  const ok = await askConfirm(`转出 ${snd.amount === "max" ? "全部" : snd.amount} ${sym}?`,
+    `从 账号 ${snd.acct}(${from.address})\n到 ${snd.to}${known ? `(你的账号 ${known.acct})` : at?.to && at.to.toLowerCase() === snd.to.toLowerCase() ? "(自动转出地址)" : "\n⚠️ 这个地址不是你在面板里的账号,请逐字核对"}\n\n` +
+    `数量:${snd.amount === "max" ? `全部${bal !== null ? "(约 " + num(bal) + ")" : ""}` : snd.amount} ${sym}${token !== "BNB" ? "\n代币:" + token : ""}\n转出无法撤回。`);
+  if (!ok) return;
+  snd.running = true; snd.log = []; renderSend(true);
+  const line = (l) => { snd.log.push(l); const pre = document.querySelector("#sendBox .sndlog"); if (pre) { pre.textContent = snd.log.join("\n"); pre.scrollTop = 1e9; } else renderSend(true); };
+  let failed = false;
+  try {
+    const r = await post("/api/send", { acct: snd.acct, token, amount: snd.amount, to: snd.to, appConfirm: snd.app });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || r.status); }
+    const reader = r.body.getReader(), dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true }); let i;
+      while ((i = buf.indexOf("\n")) >= 0) { const l = buf.slice(0, i); buf = buf.slice(i + 1); if (l.startsWith("__DONE__")) failed = l.trim() !== "__DONE__ 0"; else line(l); }
+    }
+  } catch (e) { failed = true; line("✗ " + e.message); }
+  snd.running = false;
+  if (!failed) {
+    try { const rec = [snd.to, ...sndRecent().filter((x) => x.toLowerCase() !== snd.to.toLowerCase())].slice(0, 5); localStorage.setItem("sendRecent", JSON.stringify(rec)); } catch {}
+    snd.amount = "";
+  }
+  toast(failed ? "转账失败,看下面的记录" : "转账完成", failed ? "err" : "ok");
+  renderSend(true);
+  loadWallets(true);
+}
+
+// ---------- Gang:发币宣言 + 多空对决(gang.fun 的交易附言) ----------
+//   附言的哈希在交易数据里(交易前写下),原文交易后公布;没公布的是「密封想法」,24 小时内揭晓。
+//   perf.changeNow / peak 是附言之后的价格变化(小数,0.48 = +48%)
+let notesData = null, notesCa = null;
+const isGang = (d) => !!d?.platform?.startsWith("gang");
+async function loadNotes() {
+  if (!cur || !isGang(cur)) { notesData = null; notesCa = null; renderNotesUi(); return; }
+  const ca = cur.ca.toLowerCase();
+  if (notesCa !== ca) { notesData = null; notesCa = ca; }
+  try { const r = await post("/api/notes", { ca }); const d = await r.json(); if (!r.ok) throw new Error(d.error); if (notesCa === ca) notesData = d; }
+  catch (e) { if (notesCa === ca && !notesData) notesData = { error: e.message, manifesto: null, notes: [] }; }
+  renderNotesUi();
+}
+const pctTxt = (x) => (x === null || x === undefined ? "—" : `<span class="${x >= 0 ? "up" : "down"}">${x >= 0 ? "+" : ""}${(x * 100).toFixed(x !== 0 && Math.abs(x) < 0.1 ? 1 : 0)}%</span>`);
+const confBar = (c) => (c === null || c === undefined ? "" : `<span class="nconf">信心 <i><b style="width:${Math.max(0, Math.min(100, c))}%"></b></i> ${c}</span>`);
+function renderNotesUi() {
+  const tb = $("duelTab");
+  if (tb) {
+    const show = !!(cur && isGang(cur));
+    tb.hidden = !show;
+    const n = notesData?.notes ?? [], b = n.filter((x) => x.kind === "buy").length, s = n.length - b;
+    tb.innerHTML = show && n.length ? `多空对决 <span class="up">${b}</span>:<span class="down">${s}</span>` : "多空对决";
+    if (!show && tab === "duel") { tab = "trades"; renderTab(); }
+  }
+  renderManifesto();
+  if (tab === "duel") renderTab();
+}
+function renderManifesto() {
+  const head = $("tokenHead"); if (!head || !cur) return;
+  let box = $("mfBox");
+  const m = notesData?.manifesto;
+  if (!m || !isGang(cur) || notesCa !== cur.ca.toLowerCase()) { box?.remove(); return; }
+  if (!box) { box = document.createElement("div"); box.id = "mfBox"; box.className = "manifesto"; head.appendChild(box); }
+  box.innerHTML = `<div class="mft">发币宣言 <span class="faint">${esc(m.handle ?? short(m.agent ?? ""))} · ${ago(m.ts)}前发币</span></div>
+    <div class="mfx">${m.text ? esc(m.text) : '<span class="faint">🔒 宣言还没公布</span>'}</div>
+    <div class="nmeta">${confBar(m.conf)}${m.text ? '<span class="up">✓ 发币时写下</span>' : ""}<span class="faint">发币后 ${pctTxt(m.changeNow)} · 最高 ${pctTxt(m.peak)}</span></div>`;
+}
+function noteCard(n, mine) {
+  const me = mine[n.agent];
+  const sealed = !n.text;
+  return `<div class="ncard ${me ? "me" : ""}">
+    <div class="nh"><b class="hd">${esc(n.handle ?? short(n.agent ?? ""))}</b><span class="faint mono">${esc(n.agent ? n.agent.slice(0, 7) + "…" + n.agent.slice(-4) : "")}</span>${me ? `<span class="minebdg">账号${me}</span>` : ""}
+      <span class="${n.kind === "buy" ? "up" : "down"}">${n.kind === "buy" ? "买入" : "卖出"}</span>
+      <b class="num">${n.quote !== null ? num(n.quote) : "—"}</b><span class="faint">${esc(n.quoteSymbol ?? "")}${n.usd !== null ? " · $" + num(n.usd, 2) : ""}</span>
+      <a class="faint" style="margin-left:auto" href="https://bscscan.com/tx/${esc(n.tx)}" target="_blank" rel="noopener" title="${new Date(n.ts * 1000).toLocaleString()}">${ago(n.ts)}前</a></div>
+    <div class="ntx ${n.kind} ${sealed ? "sealed" : ""}">${sealed ? `🔒 密封想法 <span class="faint">${n.revealBy ? "· " + until(n.revealBy * 1000) + "内揭晓" : ""}</span>` : esc(n.text)}</div>
+    <div class="nmeta">${confBar(n.conf)}${sealed ? "" : '<span class="up">✓ 交易前写下</span>'}
+      ${n.kind === "buy" ? `<span class="faint">此后 ${pctTxt(n.changeNow)}${n.peak ? " · 最高 " + pctTxt(n.peak) : ""}</span>` : `<span class="faint">卖出后 ${pctTxt(n.changeNow)}</span>`}</div>
+  </div>`;
+}
+function renderDuel() {
+  const box = $("tabbody");
+  if (!cur || !isGang(cur)) { box.innerHTML = '<div class="empty">多空对决只有 Gang 的币有</div>'; return; }
+  if (!notesData) { box.innerHTML = '<div class="empty">加载多空对决…</div>'; return; }
+  if (notesData.error) { box.innerHTML = `<div class="empty">读取失败:${esc(notesData.error)}</div>`; return; }
+  const n = notesData.notes, buys = n.filter((x) => x.kind === "buy"), sells = n.filter((x) => x.kind === "sell");
+  const sealedN = n.filter((x) => !x.text).length, mine = myAddrs();
+  const bw = n.length ? (buys.length / n.length) * 100 : 50;
+  box.innerHTML = n.length ? `<div class="duel">
+      <div class="dbar"><i class="b" style="width:${bw}%"></i><i class="s" style="width:${100 - bw}%"></i></div>
+      <div class="faint dsum">多方 ${buys.length} 条 · 空方 ${sells.length} 条${sealedN ? ` · ${sealedN} 条密封想法(交易后 24 小时内揭晓)` : ""} · 数据来自 gang.fun 交易附言</div>
+      <div class="dcols">
+        <div><div class="dh up">多方 <span class="faint">${buys.length} 条</span></div>${buys.map((x) => noteCard(x, mine)).join("") || '<div class="empty">还没有</div>'}</div>
+        <div><div class="dh down">空方 <span class="faint">${sells.length} 条</span></div>${sells.map((x) => noteCard(x, mine)).join("") || '<div class="empty">还没有</div>'}</div>
+      </div></div>`
+    : '<div class="empty">这个币还没有人写交易附言(多空对决是 gang.fun 上买卖时附带的想法)</div>';
+}
+setInterval(() => { if (!document.hidden && cur && isGang(cur)) loadNotes(); }, 60_000);
+
+// ---------- 交易页左侧:扫链简易版(和扫链页同一份数据、同样的分法) ----------
+//   发射 = 最近 24 小时发的、还在内盘、进度 < 30%,新的在前;待发射 = 内盘进度 ≥ 30%,快满的在前;已毕业 = 已开盘,刚毕业的在前。
+const MS_NEAR = 30;
+const MS_PF = [["all", "全部"], ["four", "four"], ["gang", "Gang"], ["idagent", "Flap"]];
+const MS_MODE = [["new", "发射"], ["near", "待发射"], ["out", "已毕业"]];
+let msPf = "all", msMode = "new";
+try { msPf = localStorage.getItem("msPf") || "all"; msMode = localStorage.getItem("msMode") || "new"; } catch {}
+const msAge = (ts) => { if (!ts) return ""; const s = Date.now() / 1000 - ts; return s < 60 ? Math.max(0, Math.round(s)) + "s" : s < 3600 ? Math.round(s / 60) + "m" : s < 86400 ? (s / 3600).toFixed(1) + "h" : (s / 86400).toFixed(1) + "d"; };
+function msList() {
+  const all = Object.values(scanIdx || {}).filter((t) => !lists.blockTokens?.[t.ca] && !(t.creator && lists.blockDevs?.[t.creator]));
+  const pf = all.filter((t) => msPf === "all" || pfOf(t) === msPf);
+  // 发射只看最近 24 小时的新盘(Flap 内盘 没有创建时间:取编号最新的 30 个),早就没人管的老盘不算
+  const now = Date.now() / 1000, maxIdx = Math.max(-1, ...pf.filter((t) => t.platform === "idagent").map((t) => t.index ?? -1));
+  const fresh = (t) => (t.createdAt ? now - t.createdAt < 86400 : t.platform === "idagent" && (t.index ?? -1) > maxIdx - 30);
+  const cnt = {
+    new: pf.filter((t) => !t.graduated && (t.progress ?? 0) < MS_NEAR && fresh(t)).length,
+    near: pf.filter((t) => !t.graduated && (t.progress ?? 0) >= MS_NEAR).length,
+    out: pf.filter((t) => t.graduated).length,
+  };
+  let list;
+  if (msMode === "new") list = pf.filter((t) => !t.graduated && (t.progress ?? 0) < MS_NEAR && fresh(t)).sort((a, b) => (b.createdAt ?? b.index ?? 0) - (a.createdAt ?? a.index ?? 0));
+  else if (msMode === "near") list = pf.filter((t) => !t.graduated && (t.progress ?? 0) >= MS_NEAR).sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0));
+  else list = pf.filter((t) => t.graduated).sort((a, b) => (b.graduatedAt ?? b.lastTradeAt ?? 0) - (a.graduatedAt ?? a.lastTradeAt ?? 0));
+  return { list: list.slice(0, 80), cnt };
+}
+// 手动隐藏 / 显示(记在本机浏览器)
+function setMs(off) { document.body.classList.toggle("ms-off", off); $("msShow").hidden = !off; try { localStorage.setItem("msOff", off ? "1" : "0"); } catch {} }
+$("msHide").onclick = () => setMs(true);
+$("msShow").onclick = () => { setMs(false); renderMiniScan(); };
+try { if (localStorage.getItem("msOff") === "1") setMs(true); } catch {}
+function renderMiniScan() {
+  const box = $("mscan"); if (!box) return;
+  const { list, cnt } = msList();
+  $("msPf").innerHTML = MS_PF.map(([k, n]) => `<button data-k="${k}" class="${k === msPf ? "on" : ""}">${n}</button>`).join("");
+  $("msMode").innerHTML = MS_MODE.map(([k, n]) => `<button data-k="${k}" class="${k === msMode ? "on" : ""}">${n}<i>${cnt[k]}</i></button>`).join("");
+  $("msPf").querySelectorAll("button").forEach((b) => (b.onclick = () => { msPf = b.dataset.k; try { localStorage.setItem("msPf", msPf); } catch {} renderMiniScan(); }));
+  $("msMode").querySelectorAll("button").forEach((b) => (b.onclick = () => { msMode = b.dataset.k; try { localStorage.setItem("msMode", msMode); } catch {} $("msList").scrollTop = 0; renderMiniScan(); }));
+  const curCa = cur?.ca?.toLowerCase();
+  $("msList").innerHTML = list.length ? list.map((t) => {
+    const mc = t.gmgn?.mcapUsd || t.mcapUsd, p = t.progress ?? 0;
+    const sub = msMode === "out" ? `毕业 ${msAge(t.graduatedAt) || "—"}` : msAge(t.createdAt) ? `${msAge(t.createdAt)}前` : "";
+    return `<div class="msrow ${t.ca === curCa ? "on" : ""}" data-ca="${esc(t.ca)}" title="${esc(t.name || t.symbol)} · ${esc(t.ca)}">
+      ${logo(t.ca, t.symbol)}
+      <div class="nm"><b>${esc(t.symbol ?? "?")}</b><span>${esc(t.platformLabel ?? "")}${sub ? " · " + sub : ""}</span></div>
+      <div class="rt"><span class="num">${mc ? "$" + mcFmt(mc) : "—"}</span>${msMode === "out" ? `<span class="faint">${t.holders ? t.holders + " 人" : ""}</span>` : `<span class="msbar"><i style="width:${Math.max(2, Math.min(100, p))}%"></i></span>`}</div>
+    </div>`;
+  }).join("") : `<div class="faint" style="padding:16px 8px;text-align:center">${Object.keys(scanIdx || {}).length ? "暂无" : "加载中…"}</div>`;
+  $("msList").querySelectorAll(".msrow").forEach((r) => (r.onclick = () => load(r.dataset.ca)));
+}
+
+// ---------- 钱包 / 侧栏 ----------
+const PF = [["all", "全部"], ["four", "four"], ["gang", "Gang"], ["idagent", "Flap"], ["other", "其他"]];
+const pfOf = (t) => t.platform === "four" ? "four" : t.platform?.startsWith("gang") ? "gang" : t.platform === "idagent" ? "idagent" : "other";
+let pfSel = "all";
+try { pfSel = localStorage.getItem("pf") || "all"; } catch {}
+function renderHoldings() {
+  if (!wallets) return;
+  const all = wallets.tokens, cnt = (k) => k === "all" ? all.length : all.filter((t) => pfOf(t) === k).length;
+  if (pfSel !== "all" && !cnt(pfSel)) pfSel = "all";
+  $("pf").innerHTML = PF.filter(([k]) => k === "all" || cnt(k)).map(([k, l]) => `<button data-k="${k}" class="${k === pfSel ? "on" : ""}">${l}<i>${cnt(k)}</i></button>`).join("");
+  document.querySelectorAll("#pf button").forEach((b) => (b.onclick = () => { pfSel = b.dataset.k; try { localStorage.setItem("pf", pfSel); } catch {} renderHoldings(); }));
+  const list = pfSel === "all" ? all : all.filter((t) => pfOf(t) === pfSel);
+  $("hlist").innerHTML = list.length ? list.map((t) => {
+    // 两个号合计现值和成本,算合计涨跌
+    let v = 0, c = 0, ok = false;
+    for (const k of ["1", "2"]) { const val = t.values?.[k], cost = t.costs?.[k]; if (val !== undefined && val !== null && cost?.cost > 0) { v += val; c += cost.cost; ok = true; } }
+    const p = ok ? (v / c - 1) * 100 : null;
+    const accts = ["1", "2"].filter((k) => t.balances[k]).join("+");
+    return `<div class="hrow" data-ca="${esc(t.ca)}">${logo(t.ca, t.symbol)}<div class="nm"><b>${esc(t.symbol ?? "?")}</b><span>${esc(t.platformLabel)} · ${t.stage === "inner" ? "内盘" : "外盘"} · 号${accts}</span></div><div class="rt">${pct(p)}<div class="faint num">${ok ? num(v) + " " + esc(unitOf(t.quote)) : ""}</div></div></div>`;
+  }).join("") : '<div class="faint" style="padding:8px">没有持仓</div>';
+  document.querySelectorAll(".hrow[data-ca]").forEach((r) => (r.onclick = () => load(r.dataset.ca)));
+  renderSideSel();
+}
+let walT2 = null;
+async function loadWallets(force = false, retry = true) {
+  try {
+    const r = await post("/api/wallets", { force });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    try { localStorage.setItem("walletsCache", JSON.stringify(d)); } catch {}
+    applyWallets(d);
+  } catch (e) {
+    // 面板刚好在重启(改了代码 / 崩了自动拉起)时请求会断:2 秒后安静地再试一次,还不行才提示
+    if (retry) return setTimeout(() => loadWallets(force, false), 2000);
+    if (!wallets) $("hlist").innerHTML = `<div class="down" style="padding:8px">读取钱包失败:${esc(e.message)} <a href="#" onclick="loadWallets(true);return false" style="color:var(--acc)">重试</a></div>`; else toast("刷新钱包失败:" + e.message, "err");
+  }
+}
+// 打开页面先用上次的结果画出来(本机浏览器缓存),新数据回来再替换
+function applyCachedWallets() {
+  try { const d = JSON.parse(localStorage.getItem("walletsCache") || "null"); if (d?.accounts) applyWallets(d); } catch {}
+}
+function applyWallets(d) {
+  {
+    wallets = d;
+    $("wchips").innerHTML = d.sessions.map((s) => {
+      const a = d.accounts.find((x) => x.acct === s.acct);
+      return a ? `<div class="wchip" title="${esc(a.address)}"><span class="dot on"></span><span class="mute">账号${a.acct}</span><b class="num">${a.bnb === null ? "—" : a.bnb.toFixed(4)}</b><span class="faint">BNB</span></div>`
+        : `<button class="wchip add" data-login="${s.acct}">+ 登录账号${s.acct}</button>`;
+    }).join("");
+    document.querySelectorAll("[data-login]").forEach((b) => (b.onclick = () => openLogin(b.dataset.login)));
+    if (!cur) renderHome();
+    renderHoldings();
+    $("wstat").innerHTML = `<div class="sechead"><span>钱包状态</span></div>` + d.accounts.map((a) => {
+      const abn = a.abnormalTxnHandling === "AutoReject" ? "自动拒绝" : a.abnormalTxnHandling === "NeedConfirmation" ? "需要确认" : (a.abnormalTxnHandling ?? "—");
+      return `<div style="margin-bottom:8px"><div class="wline"><b>账号 ${a.acct}</b><span><span class="up">● 在线</span> <a data-logout="${a.acct}">退出</a></span></div>
+        <div class="wline"><span>地址</span><b class="mono">${esc(short(a.address))}</b></div>
+        <div class="wline"><span>登录剩余</span><b class="${/小时|过期/.test(until(a.sessionExpireTime)) ? "warn" : ""}">${until(a.sessionExpireTime)}</b></div>
+        <div class="wline"><span>开发者额度</span><b class="${a.devMode?.enabled ? "" : "warn"}">${a.devMode?.enabled ? Math.round(a.devMode.used ?? 0) + " / " + a.devMode.limit + " 美元" : "未开"}</b></div>
+        <div class="wline"><span>异常交易</span><b>${esc(abn)}</b></div></div>`;
+    }).join("");
+    document.querySelectorAll("[data-logout]").forEach((x) => (x.onclick = () => doLogout(x.dataset.logout)));
+    renderSideSel(); renderTrade(); if (tab === "trades" && trades) renderTab();
+  }
+}
+const connected = () => wallets ? wallets.accounts.map((a) => a.acct) : [];
+let loginPoll = null;
+async function openLogin(acct) {
+  $("loginModal").hidden = false; $("lmTitle").textContent = `登录账号 ${acct}`;
+  $("lmQr").textContent = "生成中…"; delete $("lmQr").dataset.url; $("lmPair").textContent = ""; $("lmState").textContent = ""; $("lmOpen").removeAttribute("href");
+  try {
+    const r = await post("/api/login/start", { acct }); const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    showLogin(acct, d);
+  } catch (e) { $("lmQr").textContent = "✗"; $("lmState").innerHTML = `<span class="down">${esc(e.message)}</span>`; }
+}
+function showLogin(acct, d) {
+  if (d.svg && $("lmQr").dataset.url !== d.url) { $("lmQr").innerHTML = d.svg; $("lmQr").dataset.url = d.url; }   // svg 是本机服务器用 qrcode 生成的
+  if (d.url) $("lmOpen").href = d.url;
+  $("lmPair").innerHTML = (d.code ? `配对码 <b>${esc(d.code)}</b>` : "") +
+    (d.pin ? `<div class="faint" style="font-size:12px;margin-top:6px">这个槽位锁定的钱包:<span class="mono">${esc(d.pin)}</span><br>请用这个钱包所在的币安账号扫码,扫错会自动退出</div>` : "");
+  clearTimeout(loginPoll);
+  if (d.state === "wrong") {
+    $("lmState").innerHTML = `<span class="down">✗ ${esc(d.error ?? "扫错账号了")}</span><div style="margin-top:8px;display:flex;gap:8px;justify-content:center"><a href="#" id="lmRetry" style="color:var(--acc)">重新扫码</a><a href="#" id="lmUnpin" class="faint">解除锁定(要换钱包)</a></div>`;
+    $("lmRetry").onclick = (e) => { e.preventDefault(); openLogin(acct); };
+    $("lmUnpin").onclick = async (e) => {
+      e.preventDefault();
+      if (!(await askConfirm(`解除账号 ${acct} 的地址锁定?`, `解除后,下一次扫码登录的钱包会成为账号 ${acct} 的新锁定地址。只有确实要换成另一个币安钱包时才这么做。`))) return;
+      try { const r = await post("/api/login/unpin", { acct }); if (!r.ok) throw new Error((await r.json()).error); toast("已解除锁定,重新扫码登录", "ok"); openLogin(acct); } catch (err) { toast("解除失败:" + err.message, "err"); }
+    };
+    return;
+  }
+  if (d.state === "pending") {
+    const left = Math.max(0, Math.round((d.expireAt - Date.now()) / 1000));
+    $("lmState").innerHTML = `<span class="mute">等你扫码… 二维码还剩 ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}</span>`;
+    loginPoll = setTimeout(async () => {
+      if ($("loginModal").hidden) return;
+      const r = await post("/api/login/status", { acct }).catch(() => null);
+      showLogin(acct, r?.ok ? await r.json() : d);
+    }, 2000);
+  } else if (d.state === "ok") {
+    $("lmState").innerHTML = `<span class="up">✓ 登录成功 ${esc(short(d.address))}</span>`;
+    toast(`账号 ${acct} 已登录`, "ok"); setTimeout(() => ($("loginModal").hidden = true), 1200); loadWallets(true);
+  } else {
+    $("lmState").innerHTML = `<span class="down">${d.state === "expired" ? "二维码过期了" : "登录没成功" + (d.error ? ":" + esc(d.error) : "")}</span> <a href="#" id="lmRetry" style="color:var(--acc)">重新生成</a>`;
+    $("lmRetry").onclick = (e) => { e.preventDefault(); openLogin(acct); };
+  }
+}
+$("lmClose").onclick = () => { $("loginModal").hidden = true; clearTimeout(loginPoll); };
+async function doLogout(acct) {
+  const ok = await askConfirm(`退出账号 ${acct}?`, "退出后这台电脑上要重新扫码才能用这个号交易。");
+  if (!ok) return;
+  try { const r = await post("/api/login/logout", { acct }); const d = await r.json(); if (!r.ok) throw new Error(d.error); toast(`账号 ${acct} 已退出`); }
+  catch (e) { toast(e.message, "err"); }
+  loadWallets(true);
+}
+// ---------- 账户总览(没选币时显示在中间) ----------
+function renderHome() {
+  const d = wallets;
+  $("tokenBody").hidden = true;
+  if (!d) { $("tokenHead").innerHTML = '<div class="empty">加载账户…</div>'; return; }
+  if (!d.accounts.length) {
+    // baw 调不起来时 error 可能是一整段 Node 报错:只留最关键的一行
+    const rawErr = d.sessions.find((s) => !s.installed)?.error;
+    const slotErr = rawErr ? ((String(rawErr).match(/Error: ([^\n]+?)(?:\s+at |$)/) || [])[1] || String(rawErr).split("\n")[0]).slice(0, 160) : null;
+    $("tokenHead").innerHTML = `<div class="loginhero"><h2>先登录你的 Binance 钱包</h2><div>这台电脑上还没有登录过的 Agentic Wallet。登录信息只保存在本机。</div>
+      ${slotErr ? `<div class="herowarn">没调起币安钱包命令行(baw):${esc(slotErr)}<br>先在命令行运行 <code>npm i -g @binance/agentic-wallet</code>,装完刷新这个页面。</div>` : ""}
+      <button class="btn-acc" id="heroLogin">扫码登录</button>
+      <div class="herosteps"><b>登录前,在 Binance App 里准备好:</b>
+        <ol><li>开通 <b>Agentic Wallet</b>,并<b>绑定 Agent ID</b>(.ai 名字;内盘都要求有)</li>
+        <li>钱包设置里打开 <b>开发者模式</b>(合约交易要用,约 7 天要重开一次)</li>
+        <li>打开 <b>允许交易所有代币</b>;「异常交易处理」建议设成 <b>需要确认</b></li>
+        <li>钱包里留一点 <b>BNB</b>(买入和 gas)</li></ol>
+        <span class="faint">登录后账户总览会显示这几项是否已打开。</span></div></div>`;
+    $("heroLogin").onclick = () => openLogin(d.sessions[0]?.acct ?? "1");
+    return;
+  }
+  const px = d.bnbUsd, usdTxt = (bnb) => (px && bnb !== null && bnb !== undefined ? "≈ $" + num(bnb * px, 2) : "");
+  const totalBnb = d.accounts.reduce((a, x) => a + (x.bnb || 0), 0);
+  // 持仓:每个币两个号合计现值 / 剩余成本 / 盈亏(单位是各自的底池币)
+  const rows = d.tokens.map((t) => {
+    let v = 0, c = 0, ok = false;
+    for (const k of Object.keys(t.balances)) { const val = t.values?.[k], cost = t.costs?.[k]; if (val !== undefined && val !== null && cost?.cost > 0) { v += val; c += cost.cost; ok = true; } }
+    return { t, v: ok ? v : null, c: ok ? c : null, p: ok ? (v / c - 1) * 100 : null };
+  });
+  const inner = d.tokens.filter((t) => t.stage === "inner").length;
+  // BNB 计价的持仓能直接加总
+  const bnbHold = rows.filter((r) => r.v !== null && unitOf(r.t.quote) === "BNB").reduce((a, r) => a + r.v, 0);
+  const pending = d.sessions.filter((s) => !s.connected);
+  const keepSend = $("sendBox")?.contains(document.activeElement) ? $("sendBox") : null;   // 正在填转账就把那块原样搬过去
+  const abn = (x) => (x === "AutoReject" ? "自动拒绝" : x === "NeedConfirmation" ? "需要确认" : x ?? "—");
+  $("tokenHead").innerHTML = `<div class="home">
+    <div class="sumrow">
+      <div class="sum"><div class="k">BNB 余额(${d.accounts.length} 个号合计)</div><div class="v num">${totalBnb.toFixed(4)}<small>${usdTxt(totalBnb)}</small></div></div>
+      <div class="sum"><div class="k">持仓代币</div><div class="v num">${d.tokens.length}<small>内盘 ${inner} · 外盘 ${d.tokens.length - inner}</small></div></div>
+      <div class="sum"><div class="k">BNB 计价的持仓现值</div><div class="v num">${num(bnbHold)}<small>${usdTxt(bnbHold)}</small></div></div>
+      <div class="sum"><div class="k">BNB 价格</div><div class="v num">${px ? "$" + px.toFixed(2) : "—"}</div></div>
+    </div>
+    <div class="acards" id="secWallets">${d.accounts.map((a) => {
+      const dm = a.devMode, used = dm?.used ?? 0, lim = dm?.limit ?? 0, pctUsed = lim ? Math.min(100, (used / lim) * 100) : 0;
+      const left = until(a.sessionExpireTime), warnLeft = /小时|过期/.test(left);
+      return `<div class="acard">
+        <div class="h"><b>账号 ${a.acct}</b><span><span class="up" style="font-size:12px">● 在线</span> <button class="out" data-logout="${a.acct}">退出</button></span></div>
+        <div class="addr mono" data-copyaddr="${esc(a.address)}" title="点击复制">${esc(a.address)}</div>
+        <div class="bal num">${a.bnb === null ? "—" : a.bnb.toFixed(4)}<small>BNB</small></div>
+        <div class="usd num">${usdTxt(a.bnb)}</div>
+        <div class="kv"><span>登录剩余</span><b class="${warnLeft ? "down" : ""}">${left}</b></div>
+        <div class="kv"><span>开发者模式</span><b class="${dm?.enabled ? "" : "down"}">${dm?.enabled ? "已开" + (dm.expiresAt ? " · 剩 " + until(dm.expiresAt) : "") : "未开(合约交易用不了)"}</b></div>
+        ${dm?.enabled ? `<div class="kv"><span>今日开发者额度</span><b class="num">$${Math.round(used)} / $${lim}</b></div><div class="qbar ${pctUsed > 80 ? "hot" : ""}"><i style="width:${pctUsed}%"></i></div>` : ""}
+        <div class="kv"><span>异常交易</span><b>${esc(abn(a.abnormalTxnHandling))}</b></div>
+        <div class="kv"><span>交易所有代币</span><b class="${a.tradeAllTokens ? "" : "down"}">${a.tradeAllTokens ? "已开" : a.tradeAllTokens === false ? "未开(卖不了部分代币)" : "—"}</b></div>
+      </div>`;
+    }).join("")}${pending.map((s) => `<div class="acard add" data-login="${s.acct}"><div style="font-size:22px">+</div><div>登录账号 ${s.acct}</div></div>`).join("")}</div>
+    <div class="hcard">
+      <div class="t"><span>全部持仓(${d.tokens.length})· 点一行打开</span><span>现值 / 成本按各自底池币计</span></div>
+      ${d.tokens.length ? `<table class="num"><thead><tr><th>代币</th><th>状态</th>${d.accounts.map((a) => `<th>账号 ${a.acct}</th>`).join("")}<th>现值</th><th>成本</th><th>盈亏</th><th>美元 成本 → 现值</th><th>美元盈亏</th></tr></thead><tbody>${rows.map(({ t, v, c, p }) => `<tr class="go" data-ca="${esc(t.ca)}">
+        <td><div class="tk">${logo(t.ca, t.symbol)}<div><b>${esc(t.symbol ?? "?")}</b><div class="faint" style="font-size:11px">${esc(t.platformLabel)}</div></div></div></td>
+        <td>${t.stage === "inner" ? `<span class="up">内盘</span>${t.progress !== undefined && t.progress !== null ? ` <span class="faint">${Number(t.progress).toFixed(1)}%</span>` : ""}` : '<span style="color:var(--acc)">外盘</span>'}</td>
+        ${d.accounts.map((a) => `<td>${t.balances[a.acct] ? num(t.balances[a.acct]) : '<span class="faint">—</span>'}</td>`).join("")}
+        <td>${v !== null ? num(v) + " " + esc(unitOf(t.quote)) : '<span class="faint">—</span>'}</td>
+        <td>${c !== null ? num(c) : '<span class="faint">—</span>'}</td>
+        <td>${pct(p)}</td>${usdCells(t)}</tr>`).join("")}</tbody></table>` : '<div class="empty">还没有持仓。粘贴一个 CA 开始</div>'}
+    </div>
+    <div id="sendBox"></div>
+    <div id="homeExtras"></div>
+    <div class="faint" style="font-size:12px;text-align:center">在页面任何地方 Ctrl+V 粘贴 CA 就能打开代币 · 按 / 到搜索框</div>
+  </div>`;
+  document.querySelectorAll(".home tr.go").forEach((r) => (r.onclick = () => load(r.dataset.ca)));
+  document.querySelectorAll(".home [data-login]").forEach((b) => (b.onclick = () => openLogin(b.dataset.login)));
+  document.querySelectorAll(".home [data-logout]").forEach((b) => (b.onclick = () => doLogout(b.dataset.logout)));
+  document.querySelectorAll(".home [data-copyaddr]").forEach((x) => (x.onclick = () => copy(x.dataset.copyaddr, x)));
+  if (!xSettings) loadExtras(); else renderExtras();
+  if (keepSend) $("sendBox").replaceWith(keepSend); else renderSend(true);
+}
+function usdCells(t) {
+  let c = 0, v = 0, ok = false, approx = false;
+  for (const u of Object.values(t.usd ?? {})) { if (u.costUsd != null && u.valueUsd != null) { c += u.costUsd; v += u.valueUsd; ok = true; approx ||= u.approx; } }
+  if (!ok) return '<td class="faint">—</td><td class="faint">—</td>';
+  const p = v - c;
+  return `<td class="mute" title="${approx ? "用 GANG 等底池币买的没有历史价,成本按现价估" : "BNB 买的成本按每笔买入那一分钟的 BNB 价"}">${approx ? "约 " : ""}$${num(c, 2)} → $${num(v, 2)}</td><td class="${p >= 0 ? "up" : "down"}">${p >= 0 ? "+" : "-"}$${num(Math.abs(p), 2)}</td>`;
+}
+function goHome() {
+  cur = null; trades = null; wantCa = "home";   // 还在识别的币回来了也不再打开
+  chartCa = null;
+  history.replaceState(null, "", "/");
+  $("posBox").hidden = true; $("order").hidden = true;
+  renderHome(); renderTrade(); renderSideSel(); renderQb();
+}
+$("brand").onclick = goHome;
+// ---------- 顶栏「钱包 / 设置」:回到账户总览并跳到对应的区块 ----------
+async function goSection(id) {
+  if (cur || !document.querySelector(".home")) goHome();
+  let el = null;
+  for (let i = 0; i < 40 && !(el = document.getElementById(id)); i++) await new Promise((r) => setTimeout(r, 100));   // 设置 / 授权是后加载的
+  if (!el) return toast(wallets?.accounts?.length ? "这一块还在加载,稍等再点" : "先登录一个账号", "err");
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  el.classList.remove("secflash"); void el.offsetWidth; el.classList.add("secflash");
+}
+$("setBtn").onclick = (e) => { e.stopPropagation(); $("setMenu").hidden = !$("setMenu").hidden; $("setBtn").classList.toggle("on", !$("setMenu").hidden); };
+$("setMenu").querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => { $("setMenu").hidden = true; $("setBtn").classList.remove("on"); goSection(b.dataset.go); }));
+document.addEventListener("click", (e) => { if (!$("setMenu").hidden && !e.target.closest(".setwrap")) { $("setMenu").hidden = true; $("setBtn").classList.remove("on"); } });
+// 从扫链 / 追踪页点过来:?go=区块
+{ const g = new URLSearchParams(location.search).get("go"); if (g) setTimeout(() => goSection(g), 800); }
+function renderSideSel() { document.querySelectorAll(".hrow[data-ca]").forEach((r) => r.classList.toggle("sel", !!cur && r.dataset.ca === cur.ca.toLowerCase())); }
+function remember(d) {
+  let rec = [];
+  try { rec = JSON.parse(localStorage.getItem("recent") || "[]"); } catch {}
+  rec = [{ ca: d.ca, sym: d.symbol }, ...rec.filter((x) => x.ca.toLowerCase() !== d.ca.toLowerCase())].slice(0, 8);
+  try { localStorage.setItem("recent", JSON.stringify(rec)); } catch {}
+  renderRecent(rec);
+}
+function renderRecent(rec) {
+  if (!rec) { try { rec = JSON.parse(localStorage.getItem("recent") || "[]"); } catch { rec = []; } }
+  $("recentSec").hidden = !rec.length;
+  $("recent").innerHTML = rec.map((x) => `<button data-ca="${esc(x.ca)}">${esc(x.sym)}</button>`).join("");
+  document.querySelectorAll("#recent button").forEach((b) => (b.onclick = () => load(b.dataset.ca)));
+}
+
+// ---------- 事件 ----------
+$("ca").addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
+$("ca").addEventListener("paste", () => setTimeout(() => load(), 0));
+document.addEventListener("paste", (e) => {
+  if (e.target.closest?.("input")) return;
+  const t = (e.clipboardData?.getData("text") || "").trim();
+  const m = t.match(/0x[0-9a-fA-F]{40}/);
+  if (m) { e.preventDefault(); load(m[0]); }
+});
+// 和 GMGN 一样:页面在前台时每 1.5 秒读一下剪贴板,里面有 CA 就在顶栏显示这个币(头像 / ticker / 市值),点一下打开。
+//   浏览器要先允许读剪贴板:还没允许时顶栏显示「📋 识别剪贴板」,点一下浏览器会弹窗问,允许一次以后就自动了。
+//   拒绝了就只是没这个功能,Ctrl+V 照常能用。点 ✕ 收起,剪贴板换成别的 CA 才再出现。
+let clipCa = null, clipDismissed = null, clipPerm = "prompt", clipBusy = false;
+const clipInfo = {};   // ca → inspect 结果
+function renderClip() {
+  const box = $("clipChip");
+  if (clipPerm !== "granted") {
+    box.hidden = !navigator.clipboard?.readText;
+    box.className = "clipchip ask";
+    box.innerHTML = clipPerm === "denied" ? `<span>📋 剪贴板未授权</span>` : `<span>📋 识别剪贴板</span>`;
+    box.title = clipPerm === "denied" ? "浏览器拦了读剪贴板:点地址栏左边的图标 → 网站设置 → 剪贴板改成「允许」,再刷新"
+      : "点一下,浏览器会问是否允许读剪贴板;允许后复制 CA 回来就自动显示";
+    return;
+  }
+  if (!clipCa || clipCa === clipDismissed) { box.hidden = true; return; }
+  const d = clipInfo[clipCa];
+  const isCur = cur && cur.ca.toLowerCase() === clipCa;
+  box.className = "clipchip" + (isCur ? " on" : "");
+  box.title = (isCur ? "当前打开的就是剪贴板里这个币\n" : "点一下打开\n") + clipCa;
+  box.innerHTML = `${logo(clipCa, d?.symbol || "?")}<b>${esc(d?.symbol || clipCa.slice(0, 6) + "…" + clipCa.slice(-4))}</b>` +
+    (d?.mcUsd ? `<span class="faint">$${mcFmt(d.mcUsd)}</span>` : d === undefined ? `<span class="faint">识别中…</span>` : "") +
+    (d?.stage ? `<span class="tag ${d.stage === "inner" ? "in" : ""}">${d.stage === "inner" ? "内盘" : "外盘"}</span>` : "") +
+    `<span class="x" title="收起">✕</span>`;
+  box.hidden = false;
+}
+async function checkClipboard(fromClick = false) {
+  if (clipBusy || !navigator.clipboard?.readText) return;
+  if (!fromClick && (!document.hasFocus() || clipPerm !== "granted")) return;
+  clipBusy = true;
+  let t = "";
+  try { t = await navigator.clipboard.readText(); clipPerm = "granted"; }
+  catch { if (fromClick) { clipPerm = "denied"; toast("浏览器没允许读剪贴板;可以在地址栏左边的站点设置里改成允许", "err"); } clipBusy = false; renderClip(); return; }
+  clipBusy = false;
+  const m = (t || "").match(/0x[0-9a-fA-F]{40}/);
+  const k = m ? m[0].toLowerCase() : null;
+  if (!k || k === clipCa) { renderClip(); return; }
+  clipCa = k; clipDismissed = null;
+  renderClip();
+  if (!(k in clipInfo)) {
+    clipInfo[k] = undefined;
+    post("/api/inspect", { ca: k }).then((r) => r.json()).then((d) => { clipInfo[k] = d?.symbol ? d : null; renderClip(); }).catch(() => { clipInfo[k] = null; renderClip(); });
+  }
+}
+$("clipChip").addEventListener("click", (e) => {
+  if (clipPerm !== "granted") return checkClipboard(true);
+  if (e.target.closest(".x")) { clipDismissed = clipCa; return renderClip(); }
+  if (clipCa) load(clipCa);
+});
+(async () => {
+  try {
+    const p = await navigator.permissions.query({ name: "clipboard-read" });
+    clipPerm = p.state; p.onchange = () => { clipPerm = p.state; renderClip(); checkClipboard(); };
+  } catch { clipPerm = "prompt"; }
+  renderClip(); checkClipboard();
+})();
+window.addEventListener("focus", () => checkClipboard());
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkClipboard(); });
+setInterval(() => checkClipboard(), 1500);
+
+// 按住空格 + W 买 1%(不能按比例买的币就买输入框里的 BNB 数量)、空格 + F 清仓
+let spaceDown = false, spaceUsed = false;
+document.addEventListener("keyup", (e) => { if (e.code === "Space") { spaceDown = false; if (!e.target.closest?.("input, textarea")) e.preventDefault(); } });
+window.addEventListener("blur", () => (spaceDown = false));
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest?.("input, textarea")) return;
+  if (e.code === "Space") { e.preventDefault(); spaceDown = true; return; }   // 空格只当快捷键前缀,不滚动页面、不点按钮
+  if (!spaceDown || !cur || running) return;
+  if (e.code === "KeyW") {
+    e.preventDefault();
+    if (caps().pct) order("buy", "1pct");
+    else if (Number($("bnb").value) > 0) order("buy", $("bnb").value.trim());
+    else toast("这个币不能按比例买:先在 BNB 输入框填数量", "err");
+  } else if (e.code === "KeyF") { e.preventDefault(); order("sell", "100"); }
+});
+document.addEventListener("keydown", (e) => {
+  if (pendingConfirm && e.key === "Enter") { e.preventDefault(); pendingConfirm(true); }
+  else if (pendingConfirm && e.key === "Escape") pendingConfirm(false);
+  else if (e.key === "/" && !e.target.closest?.("input")) { e.preventDefault(); $("ca").focus(); }
+});
+document.querySelectorAll(".side-tabs button").forEach((b) => (b.onclick = () => { ui.side = b.dataset.v; renderTrade(); schedulePreview(); }));
+document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => { tab = b.dataset.t; renderTab(); }));
+$("bnbGo").onclick = () => order("buy", $("bnb").value.trim());
+function customPct() {
+  const v = $("pctIn").value.trim().replace("%", "");
+  if (!/^\d+(\.\d{1,4})?$/.test(v) || Number(v) < 0.01 || Number(v) > 1) { toast("比例要在 0.01–1 之间(单位 %)", "err"); return; }
+  order("buy", "p" + Number(v));
+}
+$("pctGo").onclick = customPct;
+$("pctIn").addEventListener("keydown", (e) => { if (e.key === "Enter") customPct(); });
+$("bnb").addEventListener("keydown", (e) => { if (e.key === "Enter") order("buy", $("bnb").value.trim()); });
+$("bnb").addEventListener("input", schedulePreview);
+$("wRefresh").onclick = () => loadWallets(true);
+try { $("oneClick").checked = localStorage.getItem("oneClick") === "1"; } catch {}
+// Gang 内盘卖出去 App 确认:默认打开(不开的话币安标成中风险的卖出会被直接拦下),关了会记住
+$("appConfirm").checked = true;
+try { if (localStorage.getItem("appConfirm") === "0") $("appConfirm").checked = false; } catch {}
+$("appConfirm").onchange = () => { try { localStorage.setItem("appConfirm", $("appConfirm").checked ? "1" : "0"); } catch {} };
+$("oneClick").onchange = () => { try { localStorage.setItem("oneClick", $("oneClick").checked ? "1" : "0"); } catch {} toast($("oneClick").checked ? "一键交易已开:点金额直接下单" : "一键交易已关:下单前会确认"); };
+
+renderRecent(); applyCachedWallets(); renderTrade(); loadWallets();
+const pre = new URLSearchParams(location.search).get("ca");
+if (pre && /^0x[0-9a-fA-F]{40}$/.test(pre)) load(pre);
+// 自动刷新:成交 10 秒,代币数据 20 秒,钱包 60 秒(下单中不刷)
+// 有实时推送时,成交 / K 线靠推送更新;下面的定时刷新只是兜底(推送断开时更勤一点)
+setInterval(() => { if (cur && !running && !document.hidden) loadTrades(); }, 30000);
+setInterval(() => { if (cur && cv.src === "own" && !document.hidden && !esOk) loadHistory(); }, 8000);
+setInterval(() => { if (cur && cv.src === "own" && !document.hidden && esOk) loadHistory(); }, 45000);
+startStream();
+loadLists().then(() => loadTicker(true)); loadScanIdx();
+setInterval(() => { if (!document.hidden) { loadScanIdx(); loadTicker(); } }, 30000);
+$("drawerX").onclick = () => ($("drawer").hidden = true);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("drawer").hidden && !pendingConfirm) $("drawer").hidden = true; });
+setInterval(() => { if (cur && !running && !document.hidden && !pendingConfirm) load(cur.ca, { quiet: true }); }, 20000);
+setInterval(() => { if (!running && !document.hidden) loadWallets(); }, 60000);
+setInterval(() => { if (cur && !document.hidden) loadAT(); }, 15000);
+</script>
+</body>
+</html>

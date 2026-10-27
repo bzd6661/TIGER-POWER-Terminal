@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TIGER POWER · 扫链</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  :root {
+    --bg:#0a0c0f; --s1:#101318; --s2:#151920; --s3:#1b2029; --line:#1e232c; --line2:#2a313d;
+    --text:#e7eaf0; --mute:#8d96a7; --faint:#5b6372;
+    --up:#16c784; --up-bg:rgba(22,199,132,.12); --down:#ea3943; --down-bg:rgba(234,57,67,.12);
+    --acc:#f0b90b; --blue:#3b82f6; --blue-bg:rgba(59,130,246,.14);
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:12px/1.4 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  body { display:flex; flex-direction:column; overflow:hidden; }
+  body.listmode { overflow:auto; }
+  button, input, select { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  .num { font-variant-numeric:tabular-nums; }
+  .mute { color:var(--mute); } .faint { color:var(--faint); } .up { color:var(--up); } .down { color:var(--down); }
+  ::-webkit-scrollbar { width:5px; height:5px; } ::-webkit-scrollbar-thumb { background:#2a313d; border-radius:3px; } ::-webkit-scrollbar-track { background:transparent; }
+
+  /* ---------- 顶栏 ---------- */
+  .top { flex:0 0 50px; display:flex; align-items:center; gap:14px; padding:0 14px; border-bottom:1px solid var(--line); background:var(--s1); }
+  .brand { display:flex; align-items:center; gap:8px; font-weight:700; font-size:15px; white-space:nowrap; }
+  .xlink { display:inline-flex; align-items:center; gap:6px; flex:none; color:var(--text); background:var(--s3); text-decoration:none; font-size:12px; font-weight:600; padding:5px 10px; border:1px solid var(--line2); border-radius:999px; }
+  .xlink svg { width:13px; height:13px; } .xlink:hover { border-color:var(--acc); color:var(--acc); }
+  @media (max-width:1100px) { .xlink span { display:none; } }
+  .brand .tmlogo { width:24px; height:24px; flex:none; display:block; filter:drop-shadow(0 1px 4px rgba(240,185,11,.25)); }
+  .brand > span { font-weight:800; letter-spacing:.5px; } .brand .tmsub { font-size:11px; font-weight:500; color:var(--mute); margin-left:-2px; }
+  @media (max-width:820px) { .brand .tmsub { display:none; } }
+  .setwrap { position:relative; flex:none; }
+  .setbtn { background:var(--s2); border:1px solid var(--line2); border-radius:999px; padding:6px 12px; font-size:13px; color:var(--text); white-space:nowrap; text-decoration:none; display:inline-block; }
+  .setbtn:hover, .setbtn.on { border-color:var(--acc); }
+  .setmenu { position:absolute; right:0; top:calc(100% + 8px); z-index:70; width:290px; background:var(--s1); border:1px solid var(--line2); border-radius:12px; padding:6px; box-shadow:0 12px 32px rgba(0,0,0,.5); }
+  .setmenu button { display:flex; align-items:center; gap:10px; width:100%; background:none; border:0; border-radius:8px; padding:8px 10px; text-align:left; color:var(--text); }
+  .setmenu button:hover { background:var(--s3); } .setmenu .mi { width:26px; text-align:center; font-size:16px; }
+  .setmenu b { display:block; font-size:13px; } .setmenu small { display:block; font-size:11px; color:var(--faint); }
+  .secflash { animation:secflash 1.6s ease-out; } @keyframes secflash { 0% { box-shadow:0 0 0 2px var(--acc); } 100% { box-shadow:0 0 0 2px transparent; } }
+  @media (max-width:820px) { .setbtn { padding:5px 9px; font-size:12px; } }
+  .setmenu a.setitem { display:flex; align-items:center; gap:10px; border-radius:8px; padding:8px 10px; color:var(--text); text-decoration:none; } .setmenu a.setitem:hover { background:var(--s3); }
+  .tipbtn { flex:none; border:0; border-radius:999px; padding:7px 14px; font-weight:800; font-size:13px; color:#1a1300; background:linear-gradient(135deg,#F8D33A,#E8890C); text-decoration:none; white-space:nowrap; box-shadow:0 0 0 0 rgba(240,185,11,.55); animation:tippulse 2.6s ease-out infinite; }
+  .tipbtn:hover { filter:brightness(1.08); animation:none; box-shadow:0 0 14px rgba(240,185,11,.55); }
+  @keyframes tippulse { 0% { box-shadow:0 0 0 0 rgba(240,185,11,.55); } 70% { box-shadow:0 0 0 9px rgba(240,185,11,0); } 100% { box-shadow:0 0 0 0 rgba(240,185,11,0); } }
+  .nav { display:flex; gap:4px; }
+  .nav a { color:var(--mute); text-decoration:none; padding:6px 10px; border-radius:8px; white-space:nowrap; font-size:13px; } .nav a.on, .nav a:hover { color:var(--text); background:var(--s3); }
+  .search { flex:1; max-width:340px; display:flex; align-items:center; gap:8px; background:var(--s2); border:1px solid var(--line); border-radius:9px; padding:0 10px; height:32px; }
+  .search input { flex:1; min-width:0; background:none; border:0; outline:0; }
+  .qbuy { display:flex; align-items:center; gap:6px; margin-left:auto; }
+  .qbuy .amt { display:flex; align-items:center; gap:4px; background:var(--s2); border:1px solid var(--line); border-radius:9px; padding:0 8px; height:32px; }
+  .qbuy .amt input { width:52px; background:none; border:0; outline:0; text-align:right; font-weight:700; color:var(--acc); }
+  .seg { display:inline-flex; gap:2px; background:var(--s2); border:1px solid var(--line); border-radius:9px; padding:2px; }
+  .seg button { background:none; border:0; color:var(--mute); padding:4px 9px; border-radius:7px; white-space:nowrap; }
+  .seg button.on { background:var(--s3); color:var(--text); }
+  .seg button i { font-style:normal; color:var(--faint); margin-left:3px; font-size:11px; }
+  .iconbtn { background:var(--s2); border:1px solid var(--line); border-radius:9px; height:32px; padding:0 9px; color:var(--mute); white-space:nowrap; }
+  .iconbtn.on { color:var(--acc); border-color:rgba(240,185,11,.45); }
+  .live { display:flex; align-items:center; gap:5px; color:var(--mute); white-space:nowrap; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--faint); } .dot.on { background:var(--up); box-shadow:0 0 6px var(--up); } .dot.off { background:var(--down); }
+
+  /* ---------- 第二行:视图 / 平台 / 筛选 ---------- */
+  .sub { flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:7px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .pchip { display:inline-flex; align-items:center; gap:5px; border:1px solid var(--line); background:var(--s2); border-radius:999px; padding:3px 10px; color:var(--mute); cursor:pointer; user-select:none; }
+  .pchip input { display:none; } .pchip:has(input:checked) { color:var(--text); border-color:var(--line2); background:var(--s3); }
+  .pchip .pd { width:7px; height:7px; border-radius:50%; }
+  .status { margin-left:auto; color:var(--faint); font-size:11px; }
+  .fpanel { position:absolute; z-index:40; top:96px; left:14px; width:min(560px, calc(100vw - 28px)); background:var(--s1); border:1px solid var(--line2); border-radius:12px; padding:12px 14px; box-shadow:0 14px 40px rgba(0,0,0,.55); }
+  .fgrid { display:grid; grid-template-columns:110px 1fr; gap:8px 10px; align-items:center; }
+  .fgrid .r { display:flex; gap:6px; align-items:center; }
+  .fin { width:80px; background:var(--s2); border:1px solid var(--line2); border-radius:7px; padding:4px 7px; outline:0; }
+  .fpanel select { background:var(--s2); border:1px solid var(--line2); border-radius:7px; padding:4px 6px; }
+  .tog { display:inline-flex; align-items:center; gap:6px; cursor:pointer; color:var(--mute); }
+
+  /* ---------- 三列 ---------- */
+  .cols { flex:1; min-height:0; display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); }
+  @media (max-width:1100px) { .cols { grid-template-columns:1fr; overflow:auto; } .colw { min-height:60vh; } body { overflow:auto; } }
+  .colw { display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--line); }
+  .colw:last-child { border-right:0; }
+  .colh { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); background:var(--s1); }
+  .colh b { font-size:13px; } .colh .cnt { color:var(--faint); }
+  .colh .pause { margin-left:auto; color:var(--acc); font-size:11px; visibility:hidden; }
+  .colw.paused .pause { visibility:visible; }
+  .colb { flex:1; overflow:auto; }
+  .empty { color:var(--faint); text-align:center; padding:40px 0; }
+
+  /* ---------- 卡片(GMGN 风格) ---------- */
+  .card { position:relative; display:flex; gap:10px; padding:10px 12px; border-bottom:1px solid #151920; cursor:pointer; text-decoration:none; color:inherit; }
+  .card:hover { background:#11151b; }
+  .card.blocked { opacity:.4; }
+  .card.flash { animation:flash 1.6s ease-out; }
+  @keyframes flash { 0% { background:rgba(240,185,11,.18); } 100% { background:transparent; } }
+  .ring { position:relative; flex:none; width:52px; height:52px; border-radius:12px; padding:2px; background:conic-gradient(var(--rc, var(--up)) calc(var(--p) * 1%), #222833 0); }
+  .ring .lg { position:relative; width:100%; height:100%; border-radius:10px; overflow:hidden; background:var(--s3); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; color:var(--mute); }
+  .ring .lg img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .ring .plat { position:absolute; right:-3px; bottom:-3px; font-size:9px; font-weight:700; padding:0 4px; border-radius:4px; border:1px solid var(--bg); color:#0a0c0f; }
+  .p-four { background:#f0b90b; } .p-gangv1, .p-gangv2 { background:#e86aa6; } .p-idagent { background:#8fb3ff; }
+  .mid { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+  .r1 { display:flex; align-items:center; gap:6px; min-width:0; }
+  .r1 .sym { font-weight:700; font-size:14px; white-space:nowrap; }
+  .r1 .nm { color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .acts { display:flex; gap:2px; margin-left:auto; opacity:0; transition:opacity .1s; }
+  .card:hover .acts, .acts .on { opacity:1; }
+  .acts button { background:none; border:0; color:var(--faint); padding:0 3px; font-size:13px; } .acts button:hover { color:var(--text); }
+  .acts .fav.on { color:var(--acc); } .acts .blk.on { color:var(--down); }
+  .r2 { display:flex; align-items:center; gap:7px; color:var(--faint); min-width:0; white-space:nowrap; overflow:hidden; }
+  .r2 .age { color:var(--up); font-weight:600; }
+  .r2 .ca:hover { color:var(--text); }
+  .r3 { display:flex; align-items:center; gap:10px; color:var(--mute); white-space:nowrap; overflow:hidden; }
+  .r3 b { color:var(--text); font-weight:500; }
+  .tags { display:flex; gap:4px; flex-wrap:wrap; }
+  .tg { font-size:10px; padding:0 5px; border-radius:4px; border:1px solid var(--line2); color:var(--mute); white-space:nowrap; line-height:16px; }
+  .tg.fee { color:#9fb4d8; border-color:#2b3a55; } .tg.bad { color:var(--down); border-color:rgba(234,57,67,.4); } .tg.good { color:var(--up); border-color:rgba(22,199,132,.4); } .tg.q { color:var(--acc); border-color:rgba(240,185,11,.35); }
+  .rt { flex:none; display:flex; flex-direction:column; align-items:flex-end; justify-content:space-between; gap:4px; }
+  .rt .mc { font-size:11px; color:var(--faint); } .rt .mc b { font-size:15px; color:var(--text); font-weight:700; }
+  .rt .pg { font-size:11px; color:var(--mute); }
+  .buy { border:1px solid rgba(22,199,132,.45); background:var(--up-bg); color:var(--up); border-radius:999px; padding:3px 10px; font-weight:700; white-space:nowrap; }
+  .buy:hover { background:var(--up); color:#03140c; }
+  .buy:disabled { opacity:.4; cursor:not-allowed; }
+
+  /* ---------- 全部列表 ---------- */
+  #listView { padding:10px 14px 30px; }
+  .lbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:8px; }
+  .twrap { overflow-x:auto; border:1px solid var(--line); border-radius:12px; background:var(--s1); }
+  table.lt { width:100%; border-collapse:collapse; min-width:980px; }
+  .lt th { position:sticky; top:0; background:var(--s1); text-align:right; font-weight:500; color:var(--faint); padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap; user-select:none; }
+  .lt th.s { cursor:pointer; } .lt th.s:hover { color:var(--text); } .lt th.on { color:var(--acc); }
+  .lt th:first-child, .lt td:first-child { text-align:left; }
+  .lt td { padding:7px 10px; border-bottom:1px solid #151920; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .lt tr { cursor:pointer; } .lt tr:hover td { background:#11151b; } .lt tr.blocked td { opacity:.4; }
+  .lt .tk { display:flex; align-items:center; gap:9px; }
+  .lt .ring { width:36px; height:36px; border-radius:9px; } .lt .ring .lg { border-radius:7px; font-size:14px; }
+  .pbar { display:inline-block; width:56px; height:4px; background:var(--s3); border-radius:2px; overflow:hidden; vertical-align:middle; margin-right:6px; }
+  .pbar i { display:block; height:100%; background:linear-gradient(90deg,var(--up),var(--acc)); }
+  .more { text-align:center; color:var(--faint); padding:14px; cursor:pointer; } .more:hover { color:var(--text); }
+
+  /* ---------- 确认 / 菜单 / 提示 / 日志 ---------- */
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:60; padding:16px; }
+  .mbox { width:100%; max-width:420px; background:var(--s1); border:1px solid rgba(59,130,246,.5); border-radius:14px; padding:16px; }
+  .mbox .t { font-weight:700; font-size:15px; } .mbox .b { color:var(--mute); margin:8px 0 14px; white-space:pre-wrap; word-break:break-all; }
+  .mbox .row { display:grid; grid-template-columns:2fr 1fr; gap:8px; }
+  .mbox button { border-radius:9px; padding:9px 0; border:1px solid var(--line2); background:var(--s3); }
+  .mbox .yes { background:var(--blue); border-color:var(--blue); color:#fff; font-weight:600; }
+  .bmenu { position:absolute; z-index:50; background:var(--s1); border:1px solid var(--line2); border-radius:9px; padding:4px; box-shadow:0 8px 30px #000a; min-width:220px; }
+  .bmenu button { display:block; width:100%; text-align:left; background:none; border:0; padding:7px 10px; border-radius:6px; } .bmenu button:hover { background:var(--s3); }
+  .toasts { position:fixed; right:14px; bottom:14px; display:flex; flex-direction:column; gap:6px; z-index:55; }
+  .toast { min-width:220px; max-width:380px; background:var(--s3); border:1px solid var(--line2); border-left:3px solid var(--blue); border-radius:9px; padding:8px 11px; box-shadow:0 8px 28px rgba(0,0,0,.45); }
+  .toast.click { cursor:pointer; } .toast.click:hover { border-color:var(--acc); } .toast.click::after { content:"  点击打开 →"; color:var(--acc); font-weight:600; }
+  .toast.ok { border-left-color:var(--up); } .toast.err { border-left-color:var(--down); }
+  .logbtn { position:fixed; left:14px; bottom:14px; z-index:55; }
+  .logp { position:fixed; left:14px; bottom:54px; width:min(560px, calc(100vw - 28px)); max-height:260px; overflow:auto; background:#07080a; border:1px solid var(--line2); border-radius:10px; padding:8px; font:11px Consolas, monospace; white-space:pre-wrap; word-break:break-all; z-index:55; }
+  .logp .err { color:var(--down); } .logp .ok { color:var(--up); }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand"><svg class="tmlogo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="tmg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F8D33A"/><stop offset="1" stop-color="#E8890C"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#tmg)"/><path d="M5 10.5H14.5M9.75 10.5V23M18.5 23V10.5H23.25A3.5 3.5 0 0 1 23.25 17.5H18.5" fill="none" stroke="#1a1300" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>TIGER POWER</span><small class="tmsub">内盘终端</small></div>
+  <div class="nav"><a href="/">交易</a><a href="/scan" class="on">扫链</a><a href="/track">追踪</a></div>
+  <div class="setwrap"><button class="setbtn" id="setBtn" title="钱包、转账、设置、授权">⚙ 钱包 / 设置</button><div class="setmenu" id="setMenu" hidden><a href="/?go=secWallets" class="setitem"><span class="mi">👛</span><span><b>钱包与持仓</b><small>余额、登录状态、全部持仓和盈亏</small></span></a><a href="/?go=sendBox" class="setitem"><span class="mi">💸</span><span><b>转账</b><small>BNB / 代币转到任意地址</small></span></a><a href="/?go=secSettings" class="setitem"><span class="mi">⚙</span><span><b>设置</b><small>单笔上限、发射后自动转出、自动领取</small></span></a><a href="/?go=secQuotes" class="setitem"><span class="mi">🪙</span><span><b>底池币余额</b><small>内盘卖出后剩下的,一键换回 BNB</small></span></a><a href="/?go=secApprovals" class="setitem"><span class="mi">🔐</span><span><b>授权管理</b><small>查看 / 撤销代币授权</small></span></a></div></div>
+  <a class="tipbtn" href="/?tip=1" title="请作者喝杯咖啡">☕ 打赏作者</a>
+  <a class="xlink" href="https://x.com/tiger_web3" target="_blank" rel="noopener" title="作者推特 @tiger_web3"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg><span>@tiger_web3</span></a>
+  <label class="search"><span class="faint">⌕</span><input id="q" placeholder="搜名称 / 代号 / CA" autocomplete="off" spellcheck="false"></label>
+  <div class="qbuy">
+    <span class="faint">快捷买</span>
+    <span class="amt" title="⚡ 按钮的买入金额(Gang 内盘按 1%)">⚡<input id="amt" value="0.01" inputmode="decimal"><span class="faint">BNB</span></span>
+    <span class="seg" id="acctSeg"><button data-v="1">号1</button><button data-v="2">号2</button><button data-v="both">两个</button></span>
+    <button class="iconbtn" id="sndBtn" title="有新盘时响一声">🔔</button>
+    <span class="live" id="liveTag"><span class="dot" id="liveDot"></span>实时</span>
+  </div>
+</div>
+<div class="sub">
+  <span class="seg" id="viewSeg"><button data-v="cols">盯新盘</button><button data-v="list">全部</button></span>
+  <label class="pchip"><input type="checkbox" class="pf" value="four" checked><span class="pd p-four"></span>four</label>
+  <label class="pchip"><input type="checkbox" class="pf" value="gang" checked><span class="pd p-gangv1"></span>Gang</label>
+  <label class="pchip"><input type="checkbox" class="pf" value="idagent" checked><span class="pd p-idagent"></span>Flap</label>
+  <button class="iconbtn" id="fBtn" style="height:26px">筛选</button>
+  <span class="faint" id="blockInfo"></span>
+  <span class="status" id="status">加载中…(第一次要回扫 four 历史,约 20 秒)</span>
+</div>
+<div class="fpanel" id="fPanel" hidden></div>
+
+<div class="cols" id="colView">
+  <section class="colw" data-col="0"><div class="colh"><b>🆕 新创建</b><span class="cnt" id="n0"></span><span class="faint" style="font-size:11px">2 小时内 · 进度 &lt; 30%</span><span class="pause">⏸ 已暂停(鼠标移开继续)</span></div><div class="colb" id="c0"></div></section>
+  <section class="colw" data-col="1"><div class="colh"><b>🔥 即将打满</b><span class="cnt" id="n1"></span><span class="faint" style="font-size:11px">进度 ≥ 30%</span><span class="pause">⏸ 已暂停(鼠标移开继续)</span></div><div class="colb" id="c1"></div></section>
+  <section class="colw" data-col="2"><div class="colh"><b>🚀 已开盘</b><span class="cnt" id="n2"></span><span class="pause">⏸ 已暂停(鼠标移开继续)</span></div><div class="colb" id="c2"></div></section>
+</div>
+<section id="listView" hidden>
+  <div class="lbar"><span class="seg" id="stSeg"></span><span class="faint" id="lcount"></span></div>
+  <div class="twrap"><table class="lt"><thead><tr id="lhead"></tr></thead><tbody id="lbody"></tbody></table></div>
+  <div class="more" id="lmore"></div>
+</section>
+
+<div class="modal" id="confirmBox" hidden><div class="mbox"><div class="t" id="cfTitle"></div><div class="b" id="cfBody"></div><div class="row"><button class="yes" id="cfYes">确认下单 ⏎</button><button id="cfNo">取消</button></div></div></div>
+<div class="toasts" id="toasts"></div>
+<button class="iconbtn logbtn" id="logBtn">日志</button>
+<div class="logp" id="logP" hidden></div>
+
+<script>
+const TOKEN_INIT = "__PANEL_TOKEN__";
+let TOKEN = TOKEN_INIT;
+const $ = (id) => document.getElementById(id);
+let data = null, running = false;
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const short = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "";
+function num(x) {
+  if (x === null || x === undefined || !isFinite(x)) return "—";
+  const a = Math.abs(x);
+  return a >= 1e9 ? (x / 1e9).toFixed(2) + "B" : a >= 1e6 ? (x / 1e6).toFixed(2) + "M" : a >= 1e3 ? (x / 1e3).toFixed(1) + "K" : a >= 1 ? x.toFixed(2) : x.toPrecision(3);
+}
+function money(x, quote) {
+  if (x === null || x === undefined || !isFinite(x)) return "—";
+  if (quote === "BNB" && data?.bnbUsd) return "$" + num(x * data.bnbUsd);
+  return num(x) + " " + esc(quote ?? "");
+}
+function age(ts) {
+  if (!ts) return "";
+  const s = Date.now() / 1000 - ts;
+  return s < 60 ? Math.max(0, Math.round(s)) + "s" : s < 3600 ? Math.round(s / 60) + "m" : s < 86400 ? (s / 3600).toFixed(1) + "h" : (s / 86400).toFixed(1) + "d";
+}
+// 令牌不对(服务器换过令牌)时:重新拿页面里的令牌再试一次。被拒的请求服务器什么都没做,重试安全
+async function refreshToken() {
+  const html = await fetch(location.pathname, { cache: "no-store" }).then((r) => r.text());
+  const m = html.match(/const TOKEN_INIT = "([0-9a-f]{48})"/);
+  if (m) TOKEN = m[1];
+  return !!m;
+}
+async function post(path, body) {
+  const send = () => fetch(path, { method: "POST", headers: { "content-type": "application/json", "x-panel-token": TOKEN }, body: JSON.stringify(body) });
+  const r = await send();
+  if (r.status === 403 && /令牌/.test(await r.clone().text()) && (await refreshToken())) return send();
+  return r;
+}
+// ca:带上代币地址时这条提示可以点,点了打开这个币(交易页)
+function toast(msg, kind = "", ca = null) {
+  const t = document.createElement("div"); t.className = "toast " + kind + (ca ? " click" : ""); t.textContent = msg;
+  if (ca) { t.title = "点击打开 " + ca; t.onclick = () => { t.remove(); location.href = "/?ca=" + ca; }; }
+  $("toasts").appendChild(t); setTimeout(() => t.remove(), kind === "err" ? 9000 : ca ? 8000 : 5000);
+}
+function log(text, cls) {
+  const div = document.createElement("div"); if (cls) div.className = cls; div.textContent = text;
+  $("logP").appendChild(div); $("logP").scrollTop = $("logP").scrollHeight;
+}
+$("logBtn").onclick = () => ($("logP").hidden = !$("logP").hidden);
+
+// ---------- 偏好:快捷买金额 / 账号 / 提示音 ----------
+const pref = { amt: "0.01", acct: "1", snd: false };
+try { Object.assign(pref, JSON.parse(localStorage.getItem("scanPref") || "{}")); } catch {}
+try { if (localStorage.getItem("scanSound") === "1") pref.snd = true; } catch {}
+const savePref = () => { try { localStorage.setItem("scanPref", JSON.stringify(pref)); } catch {} };
+$("amt").value = pref.amt;
+$("amt").oninput = () => { pref.amt = $("amt").value.trim(); savePref(); render(true); };
+function renderAcct() { document.querySelectorAll("#acctSeg button").forEach((b) => b.classList.toggle("on", b.dataset.v === pref.acct)); }
+document.querySelectorAll("#acctSeg button").forEach((b) => (b.onclick = () => { pref.acct = b.dataset.v; savePref(); renderAcct(); }));
+renderAcct();
+function renderSnd() { $("sndBtn").classList.toggle("on", pref.snd); $("sndBtn").textContent = pref.snd ? "🔔" : "🔕"; }
+$("sndBtn").onclick = () => { pref.snd = !pref.snd; savePref(); renderSnd(); if (pref.snd) beep(); };
+renderSnd();
+function beep() {
+  try { const ac = new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(0.15, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.35); o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.36); } catch {}
+}
+
+// ================= 收藏 / 屏蔽 / 筛选 =================
+let lists = { groups: [], favs: {}, blockTokens: {}, blockDevs: {} };
+async function loadLists() { try { const r = await post("/api/lists", {}); if (r.ok) { lists = await r.json(); render(true); } } catch {} }
+async function listOp(b) {
+  try { const r = await post("/api/lists/op", b); const d = await r.json(); if (!r.ok) throw new Error(d.error); lists = d; render(true); }
+  catch (e) { toast("操作失败:" + e.message, "err"); }
+}
+const isFav = (t) => !!lists.favs[t.ca];
+const isBlocked = (t) => !!lists.blockTokens[t.ca] || (!!t.creator && !!lists.blockDevs[t.creator]);
+const FDEF = { mcMin: "", mcMax: "", holdMin: "", progMin: "", progMax: "", feeMax: "", quote: "all", favOnly: false, showBlocked: false };
+const F = { ...FDEF };
+try { Object.assign(F, JSON.parse(localStorage.getItem("scanFilters") || "{}")); } catch {}
+const saveF = () => { try { localStorage.setItem("scanFilters", JSON.stringify(F)); } catch {} };
+const numOr = (v) => (v === "" || v === null || v === undefined || !isFinite(Number(v)) ? null : Number(v));
+function passFilters(t) {
+  if (!F.showBlocked && isBlocked(t)) return false;
+  if (F.favOnly && !isFav(t)) return false;
+  const mc = t.gmgn?.mcapUsd || t.mcapUsd || null;
+  const mcMin = numOr(F.mcMin), mcMax = numOr(F.mcMax), hMin = numOr(F.holdMin), pMin = numOr(F.progMin), pMax = numOr(F.progMax), feeMax = numOr(F.feeMax);
+  if (mcMin !== null && !(mc >= mcMin * 1000)) return false;
+  if (mcMax !== null && !(mc !== null && mc <= mcMax * 1000)) return false;
+  const holders = t.gmgn?.holders ?? t.holders;
+  if (hMin !== null && !(holders >= hMin)) return false;
+  const prog = t.graduated ? 100 : t.progress ?? 0;
+  if (pMin !== null && prog < pMin) return false;
+  if (pMax !== null && prog > pMax) return false;
+  if (feeMax !== null && t.feeBuy != null && t.feeBuy > feeMax) return false;   // 按基础费筛(防狙击税会递减,不算)
+  if (F.quote === "bnb" && t.quote !== "BNB") return false;
+  if (F.quote === "other" && t.quote === "BNB") return false;
+  return true;
+}
+const activeFilters = () => Object.keys(FDEF).filter((k) => String(F[k]) !== String(FDEF[k])).length;
+function renderFilterBtn() { const n = activeFilters(); $("fBtn").textContent = n ? `筛选 · ${n}` : "筛选"; $("fBtn").classList.toggle("on", n > 0); }
+function openFilters() {
+  const p = $("fPanel");
+  if (!p.hidden) { p.hidden = true; return; }
+  p.innerHTML = `<div class="fgrid">
+      <span class="mute">市值(千美元)</span><span class="r"><input class="fin" data-f="mcMin" placeholder="≥"><span class="faint">—</span><input class="fin" data-f="mcMax" placeholder="≤"></span>
+      <span class="mute">持有人</span><span class="r"><input class="fin" data-f="holdMin" placeholder="≥"></span>
+      <span class="mute">内盘进度 %</span><span class="r"><input class="fin" data-f="progMin" placeholder="≥"><span class="faint">—</span><input class="fin" data-f="progMax" placeholder="≤"></span>
+      <span class="mute">内盘费 ≤ %</span><span class="r"><input class="fin" data-f="feeMax" placeholder="比如 2"><span class="faint">不算会递减的防狙击税</span></span>
+      <span class="mute">底池</span><span class="r"><select data-f="quote"><option value="all">全部</option><option value="bnb">BNB</option><option value="other">其他币(GANG / BNCB / 币股…)</option></select></span>
+      <span class="mute">其他</span><span class="r"><label class="tog"><input type="checkbox" data-f="favOnly">只看收藏</label><label class="tog"><input type="checkbox" data-f="showBlocked">显示已屏蔽</label></span>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="iconbtn" id="fReset" style="height:28px">清空</button><button class="iconbtn on" id="fClose" style="height:28px">完成</button></div>`;
+  p.querySelectorAll("[data-f]").forEach((el) => {
+    const k = el.dataset.f;
+    if (el.type === "checkbox") el.checked = !!F[k]; else el.value = F[k] ?? "";
+    el.oninput = el.onchange = () => { F[k] = el.type === "checkbox" ? el.checked : el.value.trim(); saveF(); view.limit = 100; renderFilterBtn(); render(true); };
+  });
+  $("fReset").onclick = () => { Object.assign(F, FDEF); saveF(); renderFilterBtn(); p.hidden = true; openFilters(); render(true); };
+  $("fClose").onclick = () => (p.hidden = true);
+  p.hidden = false;
+}
+$("fBtn").onclick = (e) => { e.stopPropagation(); openFilters(); };
+document.addEventListener("click", (e) => { if (!$("fPanel").hidden && !e.target.closest("#fPanel")) $("fPanel").hidden = true; });
+
+// 费率 / 风险标签
+function tagsOf(t) {
+  const out = [];
+  if (t.feeBuy != null) out.push(`<span class="tg fee" title="内盘手续费 买 / 卖(链上核对过)">费 ${+t.feeBuy.toFixed(2)}/${t.feeSell != null ? +t.feeSell.toFixed(2) : "?"}%</span>`);
+  if (t.anti > 0) out.push(`<span class="tg bad" title="防狙击税:最近一笔成交时${t.feeAt ? "(" + age(t.feeAt) + "前)" : ""}是这个数,会随开盘时间递减;下单前以报价为准">防狙 ${+t.anti.toFixed(2)}%</span>`);
+  const pb = t.postTaxBuy ?? t.postTax, ps = t.postTaxSell ?? t.postTax;
+  if (pb > 0 || ps > 0) out.push(`<span class="tg bad" title="发射后代币税(外盘交易时收)">发射后税 ${+(pb || 0).toFixed(2)}/${+(ps || 0).toFixed(2)}%</span>`);
+  if (t.quote && t.quote !== "BNB") out.push(`<span class="tg q">${esc(t.quote)}</span>`);
+  const g = t.gmgn;
+  if (g) {
+    if (g.top10 !== null && g.top10 !== undefined) out.push(`<span class="tg ${g.top10 > 0.5 ? "bad" : ""}" title="前 10 持仓占比(GMGN)">Top10 ${(g.top10 * 100).toFixed(0)}%</span>`);
+    if (g.smart) out.push(`<span class="tg good" title="聪明钱(GMGN)">聪明钱 ${g.smart}</span>`);
+    if (g.kol) out.push(`<span class="tg good" title="KOL(GMGN)">KOL ${g.kol}</span>`);
+    if (g.rug !== null && g.rug !== undefined && g.rug > 0.3) out.push(`<span class="tg bad" title="跑路风险(GMGN)">跑路 ${(g.rug * 100).toFixed(0)}%</span>`);
+  }
+  if (isBlocked(t)) out.push('<span class="tg bad">已屏蔽</span>');
+  return out.join("");
+}
+const PL = { four: "F", gangv1: "G1", gangv2: "G2", idagent: "ID" };
+function ring(t, size = "") {
+  const p = t.graduated ? 100 : Math.max(0, Math.min(100, t.progress ?? 0));
+  const col = t.graduated ? "var(--blue)" : p >= 30 ? "var(--acc)" : "var(--up)";
+  return `<div class="ring ${size}" style="--p:${p};--rc:${col}" title="${t.graduated ? "已开盘" : "内盘进度 " + p.toFixed(1) + "%"}"><div class="lg"><img src="/img/${esc(t.ca)}" loading="lazy" alt="" onerror="this.remove()"><span>${esc((t.symbol || "?").trim().slice(0, 1).toUpperCase())}</span></div><span class="plat p-${t.platform}">${PL[t.platform] ?? ""}</span></div>`;
+}
+const mcOf = (t) => t.gmgn?.mcapUsd || t.mcapUsd || null;
+const volOf = (t) => t.gmgn?.volume24hUsd || t.volumeUsd || null;
+const buyLabel = (t) => (t.platform.startsWith("gang") && !t.graduated ? "1%" : esc(pref.amt));
+let seenCa = null;   // 第一次渲染后记住已经见过的币,之后新出现的闪一下
+function card(t) {
+  const mc = mcOf(t), vol = volOf(t), g = t.gmgn;
+  const isNew = seenCa && !seenCa.has(t.ca);
+  return `<a class="card ${isBlocked(t) ? "blocked" : ""} ${isNew ? "flash" : ""}" href="/?ca=${esc(t.ca)}" data-open="${esc(t.ca)}">
+    ${ring(t)}
+    <div class="mid">
+      <div class="r1"><span class="sym">${esc(t.symbol)}</span><span class="nm">${esc(t.name && t.name !== t.symbol ? t.name : "")}</span>
+        <span class="acts"><button class="fav ${isFav(t) ? "on" : ""}" data-fav="${esc(t.ca)}" title="${isFav(t) ? "取消收藏" : "收藏"}">${isFav(t) ? "★" : "☆"}</button><button class="blk ${isBlocked(t) ? "on" : ""}" data-blk="${esc(t.ca)}" title="屏蔽">⊘</button></span></div>
+      <div class="r2">${t.createdAt ? `<span class="age">${age(t.createdAt)}</span>` : ""}<span class="ca" data-copy="${esc(t.ca)}" title="点击复制 CA">${short(t.ca)}</span>${t.creatorHandle ? `<span title="开发者">👤${esc(t.creatorHandle)}</span>` : ""}${t.lastTradeAt ? `<span title="最近成交">· ${age(t.lastTradeAt)}前</span>` : ""}</div>
+      <div class="r3"><span title="持有人">👥 <b>${g?.holders ?? t.holders ?? "—"}</b></span><span title="成交笔数">TX <b>${g?.swaps24h ?? t.txs ?? "—"}</b></span><span title="成交额${g?.volume24hUsd ? "(24h)" : t.volumeLabel ? "(" + t.volumeLabel + ")" : ""}">V <b>${vol ? "$" + num(vol) : money(t.volume, t.quote)}</b></span></div>
+      <div class="tags">${tagsOf(t)}</div>
+    </div>
+    <div class="rt">
+      <span class="mc" title="${t.graduated ? (mc ? "外盘实时市值(DexScreener)" : t.mcapAtGrad ? "外盘没找到池子;毕业时市值 $" + num(t.mcapAtGrad) : "") : ""}">MC <b>${mc ? "$" + num(mc) : "—"}</b></span>
+      <span class="pg">${t.graduated ? (t.status && t.status !== "内盘" ? esc(t.status) : "已开盘") : (t.progress ?? 0).toFixed(1) + "%"}</span>
+      <button class="buy" data-buy="${esc(t.ca)}" ${running ? "disabled" : ""} title="快捷买入">⚡ ${buyLabel(t)}</button>
+    </div>
+  </a>`;
+}
+
+// ================= 三列(鼠标停在哪一列,哪一列就暂停刷新) =================
+const NEAR = 30;
+const paused = [false, false, false];
+document.querySelectorAll(".colw").forEach((c) => {
+  const i = Number(c.dataset.col);
+  c.addEventListener("mouseenter", () => { paused[i] = true; c.classList.add("paused"); });
+  c.addEventListener("mouseleave", () => { paused[i] = false; c.classList.remove("paused"); render(); });
+});
+function baseList() {
+  const plats = new Set([...document.querySelectorAll(".pf:checked")].map((x) => x.value));
+  const q = $("q").value.trim().toLowerCase();
+  return data.tokens.filter((t) => plats.has(t.platform.startsWith("gang") ? "gang" : t.platform) && passFilters(t) &&
+    (!q || (t.symbol ?? "").toLowerCase().includes(q) || (t.name ?? "").toLowerCase().includes(q) || t.ca.includes(q)));
+}
+// force = 用户自己的操作(改筛选、收藏…),暂停的列也刷新
+function render(force = false) {
+  if (!data) return;
+  renderFilterBtn();
+  const nb = data.tokens.filter(isBlocked).length;
+  $("blockInfo").textContent = nb ? `已屏蔽 ${nb} 个` : "";
+  if (view.mode === "list") return renderList();
+  const list = baseList();
+  const now = Date.now() / 1000;
+  const maxIdx = Math.max(-1, ...list.filter((t) => t.platform === "idagent").map((t) => t.index));
+  const isNew = (t) => !t.graduated && (t.progress ?? 0) < NEAR && (t.createdAt ? now - t.createdAt < 2 * 3600 : t.platform === "idagent" && t.index > maxIdx - 15);
+  const cols = [
+    list.filter(isNew).sort((a, b) => (b.createdAt ?? b.index ?? 0) - (a.createdAt ?? a.index ?? 0)),
+    list.filter((t) => !t.graduated && (t.progress ?? 0) >= NEAR).sort((a, b) => b.progress - a.progress),
+    list.filter((t) => t.graduated).sort((a, b) => (b.graduatedAt ?? b.lastTradeAt ?? 0) - (a.graduatedAt ?? a.lastTradeAt ?? 0)),
+  ];
+  cols.forEach((c, i) => {
+    $("n" + i).textContent = c.length;
+    if (paused[i] && !force) return;
+    $("c" + i).innerHTML = c.length ? c.slice(0, 60).map(card).join("") : '<div class="empty">暂无</div>';
+  });
+  if (!seenCa) seenCa = new Set(data.tokens.map((t) => t.ca)); else for (const t of data.tokens) seenCa.add(t.ca);
+  bindButtons();
+}
+
+// ================= 全部列表 =================
+const view = { mode: "cols", st: "inner", sort: "createdAt", dir: -1, limit: 100 };
+try { Object.assign(view, JSON.parse(localStorage.getItem("scanView") || "{}"), { limit: 100 }); } catch {}
+const saveView = () => { try { localStorage.setItem("scanView", JSON.stringify({ mode: view.mode, st: view.st, sort: view.sort, dir: view.dir })); } catch {} };
+const val = {
+  createdAt: (t) => t.createdAt ?? null, mc: (t) => mcOf(t), progress: (t) => (t.graduated ? 100 : t.progress ?? null),
+  volume: (t) => volOf(t), txs: (t) => t.gmgn?.swaps24h ?? t.txs ?? null, holders: (t) => t.gmgn?.holders ?? t.holders ?? null, lastTradeAt: (t) => t.lastTradeAt ?? null,
+};
+const COLS = [["token", "代币", null], ["mc", "市值", "mc"], ["progress", "进度", "progress"], ["volume", "成交额", "volume"], ["txs", "笔数", "txs"], ["holders", "持有人", "holders"], ["lastTradeAt", "最近成交", "lastTradeAt"], ["createdAt", "创建", "createdAt"], ["act", "", null]];
+const stOf = (t) => (t.graduated ? "out" : (t.progress ?? 0) >= NEAR ? "near" : "in");
+let mine = null, mineAt = 0;
+async function loadMine() {
+  if (mine && Date.now() - mineAt < 60_000) return;
+  try { const r = await post("/api/wallets", {}); const d = await r.json(); if (r.ok) { mine = new Set(d.tokens.map((t) => t.ca.toLowerCase())); mineAt = Date.now(); } } catch {}
+}
+function renderList() {
+  const base = baseList();
+  const STS = [["all", "全部", () => true], ["inner", "内盘中", (t) => !t.graduated], ["near", "即将打满", (t) => stOf(t) === "near"], ["out", "已开盘", (t) => t.graduated], ["mine", "我持有的", (t) => !!mine?.has(t.ca)]];
+  $("stSeg").innerHTML = STS.map(([k, l, fn]) => `<button data-k="${k}" class="${k === view.st ? "on" : ""}">${l}<i>${k === "mine" && !mine ? "…" : base.filter(fn).length}</i></button>`).join("");
+  document.querySelectorAll("#stSeg button").forEach((b) => (b.onclick = async () => { view.st = b.dataset.k; view.limit = 100; saveView(); if (view.st === "mine") { renderList(); await loadMine(); } renderList(); }));
+  const fn = STS.find((x) => x[0] === view.st)?.[2] ?? (() => true);
+  const get = val[view.sort] ?? val.createdAt;
+  const list = base.filter(fn).sort((a, b) => { const x = get(a), y = get(b); if (x === null && y === null) return 0; if (x === null) return 1; if (y === null) return -1; return (x - y) * view.dir; });
+  $("lhead").innerHTML = COLS.map(([k, l, sk]) => sk ? `<th class="s ${view.sort === sk ? "on" : ""}" data-s="${sk}">${l}${view.sort === sk ? (view.dir < 0 ? " ↓" : " ↑") : ""}</th>` : `<th>${l}</th>`).join("");
+  document.querySelectorAll("#lhead th.s").forEach((th) => (th.onclick = () => { const k = th.dataset.s; if (view.sort === k) view.dir = -view.dir; else { view.sort = k; view.dir = -1; } view.limit = 100; saveView(); renderList(); }));
+  $("lcount").textContent = `共 ${list.length} 个 · 点表头排序(再点一次反向)· 没有数据的排在最后`;
+  $("lbody").innerHTML = list.slice(0, view.limit).map((t) => {
+    const st = stOf(t), mc = mcOf(t), vol = volOf(t), prog = t.graduated ? null : t.progress;
+    return `<tr class="${isBlocked(t) ? "blocked" : ""}" data-open="${esc(t.ca)}">
+      <td><div class="tk">${ring(t)}<div style="min-width:0"><div><b>${esc(t.symbol)}</b> <span class="faint">${esc(t.name && t.name !== t.symbol ? t.name : "").slice(0, 24)}</span></div>
+        <div class="tags" style="margin-top:2px">${tagsOf(t)}<span class="faint ca" data-copy="${esc(t.ca)}" title="点击复制">${short(t.ca)}</span></div></div></div></td>
+      <td><b>${mc ? "$" + num(mc) : "—"}</b></td>
+      <td>${prog !== null && prog !== undefined ? `<span class="pbar"><i style="width:${Math.max(0, Math.min(100, prog))}%"></i></span>${prog.toFixed(1)}%` : t.status && t.status !== "内盘" ? esc(t.status) : '<span style="color:var(--blue)">已开盘</span>'}</td>
+      <td>${vol ? "$" + num(vol) : "—"}</td>
+      <td>${val.txs(t) ?? "—"}</td>
+      <td>${val.holders(t) ?? "—"}</td>
+      <td class="mute">${t.lastTradeAt ? age(t.lastTradeAt) + "前" : "—"}</td>
+      <td class="mute">${t.createdAt ? age(t.createdAt) + "前" : t.platform === "idagent" ? "#" + t.index : "—"}</td>
+      <td><span class="acts" style="opacity:1;display:inline-flex"><button class="fav ${isFav(t) ? "on" : ""}" data-fav="${esc(t.ca)}">${isFav(t) ? "★" : "☆"}</button><button class="blk ${isBlocked(t) ? "on" : ""}" data-blk="${esc(t.ca)}">⊘</button></span> <button class="buy" data-buy="${esc(t.ca)}" ${running ? "disabled" : ""}>⚡ ${buyLabel(t)}</button></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="9" class="empty">${view.st === "mine" && !mine ? "读取持仓中…" : "没有符合条件的币"}</td></tr>`;
+  $("lmore").textContent = list.length > view.limit ? `已显示 ${view.limit} / ${list.length},往下滚或点这里加载更多` : list.length ? "到底了" : "";
+  bindButtons();
+}
+window.addEventListener("scroll", () => {
+  if (view.mode !== "list" || !/加载更多/.test($("lmore").textContent)) return;
+  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 600) { view.limit += 100; renderList(); }
+}, { passive: true });
+$("lmore").onclick = () => { if (/加载更多/.test($("lmore").textContent)) { view.limit += 100; renderList(); } };
+function setMode(m) {
+  view.mode = m; saveView();
+  document.querySelectorAll("#viewSeg button").forEach((b) => b.classList.toggle("on", b.dataset.v === m));
+  $("listView").hidden = m !== "list"; $("colView").hidden = m === "list";
+  document.body.classList.toggle("listmode", m === "list");
+  render(true);
+}
+document.querySelectorAll("#viewSeg button").forEach((b) => (b.onclick = () => setMode(b.dataset.v)));
+
+// ---------- 卡片 / 行上的按钮 ----------
+function bindButtons() {
+  document.querySelectorAll("[data-fav]").forEach((b) => (b.onclick = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const t = data.tokens.find((x) => x.ca === b.dataset.fav);
+    listOp({ op: "fav", ca: b.dataset.fav, on: !isFav(t), symbol: t?.symbol, platform: t?.platform });
+  }));
+  document.querySelectorAll("[data-blk]").forEach((b) => (b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); openBlockMenu(b, data.tokens.find((x) => x.ca === b.dataset.blk)); }));
+  document.querySelectorAll("[data-buy]").forEach((b) => (b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); quickBuy(b.dataset.buy); }));
+  document.querySelectorAll("[data-copy]").forEach((x) => (x.onclick = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    navigator.clipboard?.writeText(x.dataset.copy).then(() => toast("CA 已复制:" + x.dataset.copy, "ok"), () => {});
+  }));
+  // 列表行点击打开(卡片本身是链接,中键 / Ctrl 可新标签打开)
+  document.querySelectorAll("tr[data-open]").forEach((r) => (r.onclick = (e) => { if (!e.target.closest("button,[data-copy]")) location.href = "/?ca=" + r.dataset.open; }));
+}
+function openBlockMenu(anchor, t) {
+  closeBlockMenu();
+  const m = document.createElement("div");
+  m.className = "bmenu"; m.id = "bmenu";
+  const tokOn = !!lists.blockTokens[t.ca], devOn = !!(t.creator && lists.blockDevs[t.creator]);
+  m.innerHTML = `<button data-a="tok">${tokOn ? "取消屏蔽这个币" : "屏蔽这个币"} <span class="faint">${esc(t.symbol)}</span></button>` +
+    (t.creator ? `<button data-a="dev">${devOn ? "取消屏蔽这个开发者" : "屏蔽这个开发者"} <span class="faint">${esc(t.creatorHandle || short(t.creator))}</span></button>` : `<div class="faint" style="padding:6px 10px">读不到开发者地址</div>`);
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect();
+  m.style.left = Math.min(window.innerWidth - 240, r.left) + "px"; m.style.top = r.bottom + window.scrollY + 4 + "px";
+  m.querySelector('[data-a="tok"]').onclick = () => { closeBlockMenu(); listOp({ op: "blockToken", ca: t.ca, on: !tokOn, label: t.symbol }); };
+  m.querySelector('[data-a="dev"]')?.addEventListener("click", () => { closeBlockMenu(); listOp({ op: "blockDev", address: t.creator, on: !devOn, label: t.creatorHandle || t.symbol }); });
+  setTimeout(() => document.addEventListener("click", closeBlockMenu, { once: true }), 0);
+}
+function closeBlockMenu() { $("bmenu")?.remove(); }
+
+// ---------- 加载 ----------
+async function load(force) {
+  try {
+    const r = await post("/api/scan", { force: !!force });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    data = d;
+    const t = new Date(d.at).toLocaleTimeString("zh-CN", { hour12: false });
+    $("status").textContent = `${d.tokens.length} 个盘 · ${t} 更新${d.bnbUsd ? " · BNB $" + d.bnbUsd.toFixed(0) : ""}${d.errors.length ? " · ⚠️ " + d.errors.join(";") : ""}`;
+    render();
+  } catch (e) { $("status").textContent = "读取失败:" + e.message; }
+}
+
+// ---------- 快捷买入(先确认) ----------
+function askConfirm(title, body) {
+  return new Promise((resolve) => {
+    $("cfTitle").textContent = title; $("cfBody").textContent = body; $("confirmBox").hidden = false;
+    const done = (v) => { $("confirmBox").hidden = true; document.removeEventListener("keydown", key); resolve(v); };
+    const key = (e) => { if (e.key === "Enter") done(true); else if (e.key === "Escape") done(false); };
+    document.addEventListener("keydown", key);
+    $("cfYes").onclick = () => done(true); $("cfNo").onclick = () => done(false);
+  });
+}
+async function quickBuy(ca) {
+  if (running) return;
+  const t = data.tokens.find((x) => x.ca === ca);
+  const acct = pref.acct;
+  const gangInner = t.platform.startsWith("gang") && !t.graduated;
+  const arg = gangInner ? "1pct" : pref.amt;
+  if (!gangInner && (!/^\d+(\.\d{1,8})?$/.test(arg) || Number(arg) <= 0)) { toast("快捷买入金额不对", "err"); return; }
+  if (t.status === "已满待开盘") { toast(`${t.symbol} 已打满、还没开盘,现在买不了`, "err"); return; }
+  const who = acct === "both" ? "两个号" : "账号 " + acct;
+  const what = gangInner ? "买 1%" : `用 ${arg} BNB 买`;
+  const warn = isBlocked(t) ? `\n⚠️ 这个币在屏蔽列表里${t.creator && lists.blockDevs[t.creator] ? "(开发者被屏蔽)" : ""}` : "";
+  if (!(await askConfirm(`${who} ${what} ${t.symbol}`, `${t.ca}\n${t.platformLabel} · ${t.graduated ? "外盘" : "内盘"} · 进度 ${(t.progress ?? 0).toFixed(1)}%${warn}\n点「确认下单」会直接下单(服务端会重新识别平台和内外盘)。`))) return;
+  running = true; render(true);
+  toast(`已提交:${who} ${what} ${t.symbol}`);
+  log(`—— ${who} ${what} ${t.symbol} ——`);
+  let failed = false;
+  try {
+    const r = await post("/api/run", { ca, action: "buy", acct, arg, clientTs: Date.now() });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || r.status); }
+    const reader = r.body.getReader(), dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true }); let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        if (line.startsWith("__DONE__")) { if (line.trim() !== "__DONE__ 0") failed = true; continue; }
+        const cls = /✗|✘|失败/.test(line) ? "err" : /✓|✔|成交|成功/.test(line) ? "ok" : "";
+        if (cls === "err") failed = true;
+        log(line, cls);
+      }
+    }
+  } catch (e) { failed = true; log("下单失败:" + e.message, "err"); }
+  toast(`${failed ? "失败" : "完成"}:${who} ${what} ${t.symbol}${failed ? "(看左下角日志)" : ""}`, failed ? "err" : "ok");
+  running = false; render(true);
+}
+
+document.querySelectorAll(".pf").forEach((x) => (x.onchange = () => render(true)));
+$("q").oninput = () => render(true);
+
+// ---------- 实时推送:新盘 / 毕业 → 马上重扫;成交 → 就地更新笔数和最近成交 ----------
+let es = null, rescanT = null, renderT = null;
+function liveTag(ok) { $("liveDot").className = "dot " + (ok ? "on" : "off"); $("liveTag").title = ok ? "实时推送已连接(链上事件)" : "实时推送断开,自动重连中(期间按 20 秒刷新)"; }
+function startStream() {
+  try { es?.close(); } catch {}
+  es = new EventSource("/api/stream?t=" + TOKEN);
+  es.onopen = () => liveTag(true);
+  es.onerror = async () => { liveTag(false); if (es.readyState === 2 && (await refreshToken())) setTimeout(startStream, 1000); };
+  es.onmessage = (m) => {
+    let ev; try { ev = JSON.parse(m.data); } catch { return; }
+    if (ev.type === "lists") return loadLists();
+    if (ev.type === "notice") return toast(ev.text, /失败|⚠️/.test(ev.text) ? "err" : "ok");
+    if (!data || ev.type === "hello") return;
+    if (ev.type === "launch" || ev.type === "graduate") {
+      if (ev.type === "launch" && pref.snd) beep();
+      // 服务器收到新盘 / 毕业事件会马上在后台重扫:这里 3 秒、12 秒各拿一次结果(不强制重扫,不用干等)
+      clearTimeout(rescanT); rescanT = setTimeout(() => { if (!running) load(false); setTimeout(() => { if (!running) load(false); }, 9000); }, 3000);
+      return;
+    }
+    if (ev.type === "trade") {
+      const t = data.tokens.find((x) => x.ca === ev.ca);
+      if (!t) return;
+      t.txs = (t.txs || 0) + 1; t.lastTradeAt = ev.ts;
+      if (!renderT) renderT = setTimeout(() => { renderT = null; if ($("confirmBox").hidden) render(); }, 1000);
+    }
+  };
+}
+loadLists();
+startStream();
+setMode(view.mode === "list" ? "list" : "cols");
+if (view.st === "mine") loadMine().then(() => render(true));
+load(false);
+setInterval(() => { if (!running && $("confirmBox").hidden) load(false); }, 20000);
+setInterval(() => { if (data && view.mode === "cols") render(); }, 15000);   // 「几秒前」之类的时间跟着走
+</script>
+<script>
+document.getElementById("setBtn").onclick = (e) => { e.stopPropagation(); const m = document.getElementById("setMenu"); m.hidden = !m.hidden; };
+document.addEventListener("click", (e) => { if (!e.target.closest(".setwrap")) document.getElementById("setMenu").hidden = true; });
+</script>
+</body>
+</html>

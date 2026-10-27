@@ -1,0 +1,36 @@
+# 依赖
+node_modules/
+
+# 本机登录 / 钱包信息 —— 绝对不能提交
+.wallet
+.wallet2
+baw2/.baw/
+.env
+*.env
+
+# 本机运行状态、缓存、日志
+auto-state.json
+gang/positions.json
+gang/watch-state.json
+gang/watch.log
+panel/scan-cache.json
+panel/img-cache/
+panel/panel.log
+*.log
+panel/.panel-token
+panel/autotransfer.json
+panel/autotransfer-state.json
+panel/lists.json
+panel/settings.json
+panel/latency.jsonl
+.liq-cache.json
+panel/wallet-pins.json
+panel/track.json
+panel/track-feed.jsonl
+gang/v3-state.json
+gang/v3watch.log
+gang/cli-latest/
+panel/txcache-*.json
+.quote-routes.json
+panel/scan-last.json
+panel/known-tokens.json
