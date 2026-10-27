@@ -29,7 +29,6 @@
   .brand { display:flex; align-items:center; gap:8px; font-weight:700; font-size:15px; white-space:nowrap; }
   .xlink { display:inline-flex; align-items:center; gap:6px; flex:none; color:var(--text); background:var(--s3); text-decoration:none; font-size:12px; font-weight:600; padding:5px 10px; border:1px solid var(--line2); border-radius:999px; }
   .xlink svg { width:13px; height:13px; } .xlink:hover { border-color:var(--acc); color:var(--acc); }
-  @media (max-width:1100px) { .xlink span { display:none; } }
   .brand .tmlogo { width:24px; height:24px; flex:none; display:block; filter:drop-shadow(0 1px 4px rgba(240,185,11,.25)); }
   .brand > span { font-weight:800; letter-spacing:.5px; } .brand .tmsub { font-size:11px; font-weight:500; color:var(--mute); margin-left:-2px; }
   @media (max-width:820px) { .brand .tmsub { display:none; } }
@@ -153,6 +152,10 @@
   .logbtn { position:fixed; left:14px; bottom:14px; z-index:55; }
   .logp { position:fixed; left:14px; bottom:54px; width:min(560px, calc(100vw - 28px)); max-height:260px; overflow:auto; background:#07080a; border:1px solid var(--line2); border-radius:10px; padding:8px; font:11px Consolas, monospace; white-space:pre-wrap; word-break:break-all; z-index:55; }
   .logp .err { color:var(--down); } .logp .ok { color:var(--up); }
+  /* 顶栏放不下时:先藏 Logo 小字和推特账号文字,间距收紧,搜索框可以缩窄 */
+  @media (max-width:1600px) { .brand .tmsub { display:none; } .xlink span { display:none; } }
+  @media (max-width:1500px) { .top { gap:10px; } .searchwrap, .search { min-width:120px; } }
+  @media (max-width:1300px) { .livetag { display:none; } .clipchip.ask { display:none; } }
 </style>
 </head>
 <body>

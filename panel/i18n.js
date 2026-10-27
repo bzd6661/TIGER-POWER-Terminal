@@ -184,7 +184,7 @@
 "只补了 1 小时":"only 1h backfilled",
 "还没有关注的地址":"No tracked addresses yet",
 "可补 24 小时":"allows 24h backfill",
-"钱包 / 设置":"Wallet / Settings",
+"钱包 / 设置":"Settings",
 "请作者喝杯咖啡":"Buy the author a coffee",
 "点金额直接下单":"clicking an amount places the order directly",
 "打赏走链上合约":"Tips go through an on-chain contract",
@@ -269,7 +269,7 @@
 "钱包里留一点":"Keep some",
 "交易所有代币":"trade all tokens",
 "成本按现价估":"cost estimated at current price",
-"剪贴板未授权":"Clipboard not allowed",
+"剪贴板未授权":"Clipboard off",
 "一键交易已关":"One-click trading off",
 "下单前会确认":"orders ask for confirmation",
 "约 20 秒":"about 20s",
@@ -330,7 +330,7 @@
 "开发者模式":"Developer mode",
 "点一行打开":"click a row to open",
 "美元 成本":"USD cost",
-"识别剪贴板":"Read clipboard",
+"识别剪贴板":"Clipboard",
 "点一下打开":"click to open",
 "显示已屏蔽":"Show blocked",
 "链上核对过":"verified on-chain",
@@ -344,10 +344,10 @@
 "加载更早的":"Load earlier",
 "读动态失败":"Failed to load activity",
 "点击打开":"Click to open",
-"内盘终端":"Trading Terminal",
+"内盘终端":"Terminal",
 "一键换回":"one-click swap back",
 "授权管理":"Approvals",
-"打赏作者":"Tip the author",
+"打赏作者":"Tip",
 "作者推特":"Author on X",
 "我的持仓":"My holdings",
 "最近查看":"Recently viewed",
@@ -815,7 +815,9 @@ document.addEventListener("DOMContentLoaded", () => {
   b.innerHTML = window.UI_LANG === "zh" ? "<b>中</b> / EN" : "中 / <b>EN</b>";
   b.title = window.UI_LANG === "zh" ? "Switch to English" : "切换到中文";
   b.onclick = () => { try { localStorage.setItem("lang", window.UI_LANG === "zh" ? "en" : "zh"); } catch {} location.reload(); };
-  top.appendChild(b);
+  // 放在「交易 / 扫链 / 追踪」后面:顶栏东西多、窗口窄时也一定看得见
+  const nav = top.querySelector(".nav");
+  if (nav) nav.after(b); else top.appendChild(b);
   const st = document.createElement("style");
   st.textContent = ".langbtn{flex:none;background:var(--s2);border:1px solid var(--line2);border-radius:999px;padding:5px 10px;font-size:12px;color:var(--mute);cursor:pointer;white-space:nowrap}.langbtn b{color:var(--text)}.langbtn:hover{border-color:var(--acc)}";
   document.head.appendChild(st);
