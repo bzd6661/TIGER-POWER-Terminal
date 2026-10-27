@@ -211,8 +211,9 @@ async function chFrontend() {
 // ---------- 自动买入 ----------
 function runBuy(ca, acct) {
   return new Promise((resolve) => {
+    // 只用本机装好的(固定版本)gang CLI 下单;自动下载的最新版只用来看里面有没有新地址,绝不在下单进程里运行
     const env = { ...process.env };
-    if (existsSync(cliChain())) env.GANG_CLI_CHAIN = cliChain();   // 用最新版 CLI(认得新发射台)
+    delete env.GANG_CLI_CHAIN;
     const ps = spawn(process.execPath, [here("./gangbuy.mjs"), ca, "--acct", acct, "--max-bnb", MAX_BNB], { env, cwd: here("../"), windowsHide: true });
     let out = "";
     ps.stdout.on("data", (d) => (out += d)); ps.stderr.on("data", (d) => (out += d));

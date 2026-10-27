@@ -227,6 +227,7 @@ function execOrder(d, action, plans, { arg, t0 = Date.now(), clientTs = null, on
       ps.on("close", (code) => {
         busy.delete(p.a);
         if (code === 0 && action === "buy" && d.platform !== "idagent") noteToken(p.a, d.ca);   // 外盘买的也记下,持仓列表马上能显示
+        invalidate(d.ca);   // 自己下完单:成交列表 / K 线的缓存标成过期,下一次请求就会带上这笔
         recordLatency({ ts: Date.now(), platform: d.platform, stage: d.stage, action, acct: p.a, arg, ok: code === 0, ms: Date.now() - t0,
           clickToServer: Number(clientTs) > 0 ? Math.max(0, t0 - Number(clientTs)) : null, steps });
         worst = Math.max(worst, code ?? 1);
@@ -245,6 +246,9 @@ async function copyOrder({ ca, action, accts, bnb, arg, slip }) {
   for (let i = 0; i < 60 && ok.some((a) => busy.has(a)); i++) await new Promise((r) => setTimeout(r, 500));
   const free = ok.filter((a) => !busy.has(a));
   if (!free.length) throw new Error("钱包一直有单在跑,这次没跟");
+  free.forEach((a) => busy.add(a));   // 马上占住,和检查之间没有 await
+  let started = false;
+  try {
   const d = await detectCached(ca, 4_000);
   if (action === "buy") {
     checkMaxBuy(bnb);
@@ -262,12 +266,14 @@ async function copyOrder({ ca, action, accts, bnb, arg, slip }) {
     const i = p.args.indexOf("--slip");
     if (i >= 0) p.args[i + 1] = String(Number(slip)); else p.args.push("--slip", String(Number(slip)));
   }
+  started = true;
   const r = await execOrder(d, action, plans, { arg });
   const results = {};
   for (const [a, x] of Object.entries(r.results)) results[a] = { ok: x.code === 0, submitted: x.submitted, last: x.out.slice(-2) };
   for (const a of ok.filter((a) => !free.includes(a))) results[a] = { ok: false, submitted: false, last: ["钱包一直有单在跑,跳过"] };
   for (const a of accts.filter((a) => !ok.includes(a))) results[a] = { ok: false, submitted: false, last: ["没登录,跳过"] };
   return { results, symbol: d.symbol };
+  } finally { if (!started) free.forEach((a) => busy.delete(a)); }
 }
 // four 的脚本没有 --acct:用环境变量 AGENTBUY_ACCT 选账号 + FOURBUY_WALLET 给地址
 function fourEnv(acct, cmd) {
@@ -341,6 +347,11 @@ const server = http.createServer(async (req, res) => {
     // 本地图表库(TradingView Lightweight Charts 4.2.0,Apache-2.0,和官方发布文件逐字节一致)
     // 中英文切换(页面加载时最先执行)
     // 新版本提醒:页面脚本 + 状态(只读公开的版本号,不含任何本机信息,GET 不要令牌)
+    // 三个页面共用:数字 / 时间格式、单色图标
+    if (req.method === "GET" && (req.url === "/fmt.js" || req.url === "/icons.js")) {
+      res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" });
+      return res.end(readFileSync(here("." + req.url)));
+    }
     if (req.method === "GET" && req.url === "/update.js") {
       res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" });
       return res.end(readFileSync(here("./update.js")));
@@ -589,6 +600,10 @@ const server = http.createServer(async (req, res) => {
       const ss = await sessions();
       for (const a of accts) if (!ss[a]?.connected) throw new Error(`账号${a} 在这台电脑上没登录`);
       for (const a of accts) if (busy.has(a)) throw new Error(`账号${a} 还有一笔在跑,等它结束`);
+      // 检查完马上占住(和检查之间不能有 await,否则两个请求会同时通过);后面任何一步出错都要放开
+      accts.forEach((a) => busy.add(a));
+      let started = false;
+      try {
       const d = await detectCached(ca);   // 20 秒内识别过就直接用
       // 单笔上限:按 BNB 买直接比;按比例买用报出来的花费(底池不是 BNB 的按美元价换算成 BNB)
       if (action === "buy") {
@@ -598,7 +613,7 @@ const server = http.createServer(async (req, res) => {
           const px = await bnbUsd();
           bnb = d.quote === "BNB" ? cost : cost && d.quoteUsd && px ? (cost * d.quoteUsd) / px : null;
         }
-        if (bnb) checkMaxBuy(bnb);
+        checkMaxBuy(bnb);   // 算不出 BNB(bnb 为空)时,设了单笔上限就直接拒绝
       }
       const plans = accts.map((a) => ({ a, ...route(d, action, a, arg, appConfirm === true) }));
       // 选了滑点就加 --slip(不选用各脚本自己的默认值)
@@ -608,9 +623,11 @@ const server = http.createServer(async (req, res) => {
       }
       res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "x-accel-buffering": "no" });
       res.write(`识别:${d.platformLabel} · ${d.stage === "inner" ? "内盘" : "外盘"} · ${d.symbol}\n`);
+      started = true;
       execOrder(d, action, plans, { arg, t0, clientTs, onLine: (a, l) => res.write(`[账号${a}] ${l}\n`) })
         .then((r) => { res.write(`__DONE__ ${r.worst}\n`); res.end(); });
       return;
+      } finally { if (!started) accts.forEach((a) => busy.delete(a)); }
     }
     json(res, 404, { error: "没有这个接口" });
   } catch (e) {

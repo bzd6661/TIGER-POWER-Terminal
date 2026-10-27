@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { bawSpawn } from "../accounts.mjs";
 
 function findCli() {
-  // GANG_CLI_CHAIN:指定另一份 CLI 的 chain.js(V3 监控会把最新版下到 gang/cli-latest,新发射台要新版 CLI 才认得)
+  // GANG_CLI_CHAIN:手动指定另一份(你自己审过的)CLI 的 chain.js;程序不会自动设置它
   if (process.env.GANG_CLI_CHAIN && existsSync(process.env.GANG_CLI_CHAIN)) return process.env.GANG_CLI_CHAIN;
   const rel = join("@gangfun", "cli", "src", "chain.js");
   const c = process.env.APPDATA && join(process.env.APPDATA, "npm", "node_modules", rel);

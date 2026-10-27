@@ -4,6 +4,10 @@
 //   GMGN:用 gmgn-cli 自己的 key(gmgn-cli 的默认配置位置),账户级限流 —— 每 3 分钟最多调一次 trenches,且只在扫链页开着时调;
 //         只在每分钟的第 35–50 秒、且不在 5 的整数分钟调(避开同一个 key 上别的定时任务);遇到限流整体停 5 分钟。没配 key 就没有 GMGN 数据。
 import { spawn } from "node:child_process";
+import net from "node:net";
+import { lookup as dnsLookupCb } from "node:dns";
+import { promisify } from "node:util";
+const dnsLookup = promisify(dnsLookupCb);
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -82,6 +86,48 @@ async function resolveUrl(ca, meta) {
   saveIndex();
   return url;
 }
+// 图片地址来自代币的元数据(发币的人自己填的),不能信:
+//   只许 https;每次请求(包括跳转后的地址)都先解析域名,落在本机 / 内网 / 保留地址就拒绝;最多跟 3 次跳转;
+//   边下边数字节,超过 3 MB 立刻中断(不先整个下载完再判断)
+const IMG_MAX = 3 * 1024 * 1024;
+function privateIp(ip) {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split(".").map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
+  }
+  const v = ip.toLowerCase();
+  if (v.startsWith("::ffff:")) return privateIp(v.slice(7));
+  return v === "::" || v === "::1" || v.startsWith("fc") || v.startsWith("fd") || v.startsWith("fe80") || v.startsWith("ff");
+}
+async function publicHttpsUrl(raw) {
+  let u;
+  try { u = new URL(raw); } catch { return null; }
+  if (u.protocol !== "https:" || u.username || u.password) return null;
+  const host = u.hostname.replace(/^\[|\]$/g, "");
+  const ips = net.isIP(host) ? [host] : (await dnsLookup(host, { all: true }).catch(() => [])).map((x) => x.address);
+  if (!ips.length || ips.some(privateIp)) return null;
+  return u;
+}
+export async function safeDownload(raw) {
+  let url = raw;
+  for (let hop = 0; hop < 4; hop++) {
+    const u = await publicHttpsUrl(url);
+    if (!u) return null;
+    const r = await fetch(u, { redirect: "manual", signal: AbortSignal.timeout(20000) });
+    if (r.status >= 300 && r.status < 400 && r.headers.get("location")) { url = new URL(r.headers.get("location"), u).href; continue; }
+    if (!r.ok || !r.body) return null;
+    if (Number(r.headers.get("content-length") || 0) > IMG_MAX) return null;
+    const chunks = [];
+    let n = 0;
+    for await (const c of r.body) {
+      n += c.length;
+      if (n > IMG_MAX) { try { await r.body.cancel(); } catch {} return null; }
+      chunks.push(Buffer.from(c));
+    }
+    return Buffer.concat(chunks);
+  }
+  return null;
+}
 function imageType(b) {
   if (b[0] === 0x89 && b[1] === 0x50) return "image/png";
   if (b[0] === 0xff && b[1] === 0xd8) return "image/jpeg";
@@ -101,10 +147,8 @@ export async function tokenImage(ca, meta) {
   const p = limit(async () => {
     const url = await resolveUrl(ca, meta);
     if (!url) return null;
-    const r = await fetch(url, { signal: AbortSignal.timeout(20000) }).catch(() => null);
-    if (!r || !r.ok) return null;
-    const body = Buffer.from(await r.arrayBuffer());
-    if (body.length > 3 * 1024 * 1024) return null;
+    const body = await safeDownload(url).catch(() => null);
+    if (!body) return null;
     const type = imageType(body);
     if (!type) return null;
     writeFileSync(file, body);

@@ -235,7 +235,7 @@ export async function quoteUsdOf(q, fallback) {
 const allCache = new Map();   // ca → { at, v }
 const histBusy = new Map();
 // 有新成交推过来时,让这个币的缓存失效(下次请求就会带上新成交)
-// 有新成交时只标成「过期」:下次请求先拿旧的(页面不用等),同时后台增量刷新
+// 有新成交 / 自己下完单时标成「过期」:下次请求等增量刷新完再返回(只拉最新一页,很快)
 export function invalidate(ca) { const h = allCache.get(String(ca).toLowerCase()); if (h) h.at = 0; }
 export function history(d, { wait = false } = {}) {
   const ca = d.ca.toLowerCase();
@@ -243,7 +243,9 @@ export function history(d, { wait = false } = {}) {
   if (hit && Date.now() - hit.at < 8_000) return Promise.resolve(hit.v);
   if (!histBusy.has(ca)) histBusy.set(ca, historyOnce(d).finally(() => histBusy.delete(ca)));
   // 5 分钟内的旧结果先用着(后台已经在刷新);更旧的、或者要求等最新的,就等这一轮
-  if (hit && !wait && Date.now() - hit.at < 300_000 || hit && hit.at === 0 && !wait) { histBusy.get(ca).catch(() => {}); return Promise.resolve(hit.v); }
+  // 5 分钟内的旧结果先用着(后台已经在刷新)。但标成「过期」(有新成交 / 刚下完单)的要等这一轮刷新:
+  //   增量刷新只拉最新一页,一般 1 秒内,换来的是自己刚下的单马上能在成交列表里看到
+  if (hit && hit.at !== 0 && !wait && Date.now() - hit.at < 300_000) { histBusy.get(ca).catch(() => {}); return Promise.resolve(hit.v); }
   return histBusy.get(ca);
 }
 async function historyOnce(d) {

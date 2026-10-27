@@ -6,6 +6,8 @@
 <title>TIGER POWER · 扫链</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <script src="/i18n.js"></script>
+<script src="/fmt.js"></script>
+<script src="/icons.js"></script>
 <script src="/update.js" defer></script>
 <style>
   :root {
@@ -111,10 +113,16 @@
   .r2 .ca:hover { color:var(--text); }
   .r3 { display:flex; align-items:center; gap:10px; color:var(--mute); white-space:nowrap; overflow:hidden; }
   .r3 b { color:var(--text); font-weight:500; }
-  .tags { display:flex; gap:4px; flex-wrap:wrap; }
-  .tg { font-size:10px; padding:0 5px; border-radius:4px; border:1px solid var(--line2); color:var(--mute); white-space:nowrap; line-height:16px; }
+  .tags { display:flex; gap:5px; flex-wrap:wrap; margin-top:2px; }
+  .tg { font-size:12px; font-weight:700; padding:0 7px; border-radius:5px; border:0; background:#232a36; color:#c3cad5; white-space:nowrap; line-height:21px; }
   .xs { margin-left:4px; padding:0 5px; border-radius:4px; border:1px solid var(--line2, #2a2f36); font-size:11px; cursor:pointer; color:var(--mute, #8b93a1); } .xs:hover { color:var(--text, #fff); border-color:var(--acc); }
-  .tg.fee { color:#9fb4d8; border-color:#2b3a55; } .tg.bad { color:var(--down); border-color:rgba(234,57,67,.4); } .tg.good { color:var(--up); border-color:rgba(22,199,132,.4); } .tg.q { color:var(--acc); border-color:rgba(240,185,11,.35); }
+  .tg.fee { color:#9cc3ff; background:rgba(59,130,246,.18); }
+  .tg.bad { color:#ff6b74; background:rgba(234,57,67,.18); }
+  .tg.good { color:#2ee59d; background:rgba(22,199,132,.18); }
+  .tg.q { color:#ffb347; background:rgba(255,153,0,.17); }
+  .tg.tax { color:#c9b6ff; background:rgba(139,92,246,.22); }
+  .tg.plat { color:#ffd84d; background:rgba(240,185,11,.16); }
+  .tg.gate { color:#ff6b74; background:rgba(234,57,67,.18); }
   .rt { flex:none; display:flex; flex-direction:column; align-items:flex-end; justify-content:space-between; gap:4px; }
   .rt .mc { font-size:11px; color:var(--faint); } .rt .mc b { font-size:15px; color:var(--text); font-weight:700; }
   .rt .pg { font-size:11px; color:var(--mute); }
@@ -158,23 +166,98 @@
   @media (max-width:1600px) { .brand .tmsub { display:none; } .xlink span { display:none; } }
   @media (max-width:1500px) { .top { gap:10px; } .searchwrap, .search { min-width:120px; } }
   @media (max-width:1300px) { .livetag { display:none; } .clipchip.ask { display:none; } }
+
+  /* ===== 统一设计规范(三个页面共用;放在样式最后,覆盖前面各写各的) =====
+     颜色只表达「需要你注意」的事:税 = 琥珀,分红 = 绿,门槛 / 风险 / 暂停 = 红,费用和数据提示 = 蓝;
+     平台、底池币等信息一律中性灰,平台前面加一个小色点(和扫链头像角标同一组颜色)。标签字重 500,让币名和价格最显眼。 */
+  :root {
+    --faint:#6f7889;
+    --tg-neutral:#b4bcc8; --tg-neutral-bg:#1f2530;
+    --tg-tax:#e8b04a;  --tg-tax-bg:rgba(232,176,74,.13);
+    --tg-div:#3fcf98;  --tg-div-bg:rgba(22,199,132,.13);
+    --tg-risk:#ff6b74; --tg-risk-bg:rgba(234,57,67,.14);
+    --tg-info:#8fb3ff; --tg-info-bg:rgba(59,130,246,.13);
+    --pc-four:#e0b23a; --pc-gang:#d77aa8; --pc-flap:#9b86e0;
+  }
+  /* 顶栏:三个页面同样高度、间距、控件高度 */
+  .top { flex:0 0 50px; height:50px; gap:12px; padding:0 14px; }
+  .search, .clipchip, .wchip { height:32px; }
+  /* 打赏:次级按钮,不闪不渐变 */
+  .tipbtn { animation:none; background:var(--s2); color:var(--acc); border:1px solid rgba(240,185,11,.4); box-shadow:none; padding:5px 12px; font-weight:700; font-size:12.5px; border-radius:8px; }
+  .tipbtn:hover { border-color:var(--acc); filter:none; box-shadow:none; }
+  /* 标签:一个规格 */
+  .tg, .mtags .mtg, .badges .bdg, .tlist .tag, .ctab .tag {
+    display:inline-flex; align-items:center; gap:5px; height:20px; line-height:20px; padding:0 7px; border:0; border-radius:4px;
+    font-size:11.5px; font-weight:500; white-space:nowrap; box-sizing:border-box; background:var(--tg-neutral-bg); color:var(--tg-neutral);
+  }
+  .tg.tax, .mtags .mtg.k-tax, .badges .bdg.tax { color:var(--tg-tax); background:var(--tg-tax-bg); }
+  .tg.good, .mtags .mtg.k-div, .badges .bdg.good { color:var(--tg-div); background:var(--tg-div-bg); }
+  .tg.bad, .tg.gate, .mtags .mtg.k-bad, .badges .bdg.bad, .tag.realtag { color:var(--tg-risk); background:var(--tg-risk-bg); }
+  .tg.fee, .tg.info, .badges .bdg.info { color:var(--tg-info); background:var(--tg-info-bg); }
+  .pdot { width:6px; height:6px; border-radius:50%; flex:none; display:inline-block; }
+  .pd-four { background:var(--pc-four); } .pd-gang { background:var(--pc-gang); } .pd-flap { background:var(--pc-flap); } .pd-in { background:var(--up); } .pd-out { background:var(--blue, #3b82f6); }
+  /* 扫链头像角标:和平台色点同一组颜色 */
+  .p-four { background:var(--pc-four); } .p-gangv1, .p-gangv2, .p-gangv3 { background:var(--pc-gang); } .p-idagent, .p-flapportal { background:var(--pc-flap); }
+
+  /* ===== 扫链页整理(只在本页) ===== */
+  svg.ic { flex:none; vertical-align:-2px; }
+  /* 顶栏顺序:Logo → 导航 → 搜索(撑满)→ 快捷买 / 账号 / 提示音 → 实时 → 设置 / 打赏 */
+  .top .search { flex:1 1 auto; max-width:440px; }
+  .top .search .faint { display:inline-flex; }
+  .qbuy { margin-left:auto; }
+  .top .live { flex:none; }
+  .setbtn, .tipbtn { display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:7px; font-size:12.5px; }
+  /* 控件两档:小 24px / 圆角 6(第二行筛选条),中 30px / 圆角 7(顶栏) */
+  .iconbtn, .qbuy .amt { height:30px; border-radius:7px; display:inline-flex; align-items:center; gap:4px; }
+  .seg { height:30px; border-radius:7px; align-items:stretch; }
+  .seg button { display:inline-flex; align-items:center; padding:0 9px; border-radius:5px; }
+  .sub .seg, .lbar .seg { height:24px; border-radius:6px; }
+  .sub .seg button, .lbar .seg button { padding:0 8px; border-radius:4px; }
+  .sub .iconbtn, .pchip { height:24px; border-radius:6px; padding:0 9px; }
+  .fpanel .iconbtn { height:30px; padding:0 12px; }
+  .sndic { display:inline-flex; }
+  /* 三列等分(用户偏好;曾试过中间列收窄) */
+  .cols { grid-template-columns:repeat(3, minmax(0,1fr)); }
+  .colh { white-space:nowrap; overflow:hidden; } .colh b, .colh .cnt { flex:none; } .colh > .faint { overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  @media (max-width:1100px) { .cols { grid-template-columns:1fr; } }
+  .colh b { display:inline-flex; align-items:center; gap:5px; } .colh b svg { color:var(--mute); }
+  /* 卡片:标签一行放不下就截掉(右侧淡出),卡片高度固定 */
+  .card { height:105px; overflow:hidden; }
+  .card .tags { flex-wrap:nowrap; overflow:hidden; min-width:0; }
+  .card .tags.ovf { -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent); mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent); }
+  .r2 .dev { color:var(--faint); opacity:.8; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .r2 .lt2 { color:var(--faint); }
+  .r3 > span { display:inline-flex; align-items:center; gap:3px; }
+  .acts button { display:inline-flex; align-items:center; }
+  .buy { display:inline-flex; align-items:center; gap:3px; }
+  .ring .plat svg { vertical-align:-1px; }
+  /* 空状态 / 加载骨架 */
+  .colb .empty { padding:28px 12px; display:flex; justify-content:center; align-items:center; gap:10px; white-space:nowrap; }
+  .empty .eact { background:none; border:1px solid var(--line2); border-radius:6px; height:24px; padding:0 9px; color:var(--mute); }
+  .empty .eact:hover { color:var(--text); border-color:var(--acc); }
+  .skc { height:105px; display:flex; gap:10px; padding:10px 12px; border-bottom:1px solid #151920; }
+  .skc i { display:block; border-radius:6px; background:linear-gradient(90deg,var(--s2) 0%,var(--s3) 50%,var(--s2) 100%); background-size:200% 100%; animation:skshim 1.3s linear infinite; }
+  .skc .s0 { width:52px; height:52px; border-radius:12px; flex:none; }
+  .skc .sm { flex:1; display:flex; flex-direction:column; gap:8px; padding-top:2px; }
+  @keyframes skshim { 0% { background-position:100% 0; } 100% { background-position:-100% 0; } }
+  .skhint { color:var(--faint); font-size:11px; text-align:center; padding:10px 12px; }
 </style>
 </head>
 <body>
 <div class="top">
   <div class="brand"><svg class="tmlogo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="tmg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F8D33A"/><stop offset="1" stop-color="#E8890C"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#tmg)"/><path d="M5 10.5H14.5M9.75 10.5V23M18.5 23V10.5H23.25A3.5 3.5 0 0 1 23.25 17.5H18.5" fill="none" stroke="#1a1300" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>TIGER POWER</span><small class="tmsub">内盘终端</small></div>
   <div class="nav"><a href="/">交易</a><a href="/scan" class="on">扫链</a><a href="/track">追踪</a></div>
-  <div class="setwrap"><button class="setbtn" id="setBtn" title="钱包、转账、设置、授权">⚙ 钱包 / 设置</button><div class="setmenu" id="setMenu" hidden><a href="/?go=secWallets" class="setitem"><span class="mi">👛</span><span><b>钱包与持仓</b><small>余额、登录状态、全部持仓和盈亏</small></span></a><a href="/?go=sendBox" class="setitem"><span class="mi">💸</span><span><b>转账</b><small>BNB / 代币转到任意地址</small></span></a><a href="/?go=secSettings" class="setitem"><span class="mi">⚙</span><span><b>设置</b><small>单笔上限、发射后自动转出、自动领取</small></span></a><a href="/?go=secQuotes" class="setitem"><span class="mi">🪙</span><span><b>底池币余额</b><small>内盘卖出后剩下的,一键换回 BNB</small></span></a><a href="/?go=secApprovals" class="setitem"><span class="mi">🔐</span><span><b>授权管理</b><small>查看 / 撤销代币授权</small></span></a></div></div>
-  <a class="tipbtn" href="/?tip=1" title="请作者喝杯咖啡">☕ 打赏作者</a>
-  <a class="xlink" href="https://x.com/tiger_web3" target="_blank" rel="noopener" title="作者推特 @tiger_web3"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg><span>@tiger_web3</span></a>
-  <label class="search"><span class="faint">⌕</span><input id="q" placeholder="搜名称 / 代号 / CA" autocomplete="off" spellcheck="false"></label>
+  <label class="search"><span class="faint" data-ic="search"></span><input id="q" placeholder="搜名称 / 代号 / CA" autocomplete="off" spellcheck="false"></label>
   <div class="qbuy">
     <span class="faint">快捷买</span>
-    <span class="amt" title="⚡ 按钮的买入金额(Gang 内盘按 1%)">⚡<input id="amt" value="0.01" inputmode="decimal"><span class="faint">BNB</span></span>
+    <span class="amt" title="⚡ 按钮的买入金额(Gang 内盘按 1%)"><span class="faint" data-ic="bolt" data-sz="12"></span><input id="amt" value="0.01" inputmode="decimal"><span class="faint">BNB</span></span>
     <span class="seg" id="acctSeg"><button data-v="1">号1</button><button data-v="2">号2</button><button data-v="both">两个</button></span>
-    <button class="iconbtn" id="sndBtn" title="有新盘时响一声">🔔</button>
-    <span class="live" id="liveTag"><span class="dot" id="liveDot"></span>实时</span>
+    <button class="iconbtn" id="sndBtn" title="有新盘时响一声"></button>
   </div>
+  <span class="live" id="liveTag"><span class="dot" id="liveDot"></span>实时</span>
+  <div class="setwrap"><button class="setbtn" id="setBtn" title="钱包、转账、设置、授权"><span data-ic="gear"></span>钱包 / 设置</button><div class="setmenu" id="setMenu" hidden><a href="/?go=secWallets" class="setitem"><span class="mi">👛</span><span><b>钱包与持仓</b><small>余额、登录状态、全部持仓和盈亏</small></span></a><a href="/?go=sendBox" class="setitem"><span class="mi">💸</span><span><b>转账</b><small>BNB / 代币转到任意地址</small></span></a><a href="/?go=secSettings" class="setitem"><span class="mi">⚙</span><span><b>设置</b><small>单笔上限、发射后自动转出、自动领取</small></span></a><a href="/?go=secQuotes" class="setitem"><span class="mi">🪙</span><span><b>底池币余额</b><small>内盘卖出后剩下的,一键换回 BNB</small></span></a><a href="/?go=secApprovals" class="setitem"><span class="mi">🔐</span><span><b>授权管理</b><small>查看 / 撤销代币授权</small></span></a></div></div>
+  <a class="tipbtn" href="/?tip=1" title="请作者喝杯咖啡"><span data-ic="coffee"></span>打赏作者</a>
+  <a class="xlink" href="https://x.com/tiger_web3" target="_blank" rel="noopener" title="作者推特 @tiger_web3"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg><span>@tiger_web3</span></a>
 </div>
 <div class="sub">
   <span class="seg" id="viewSeg"><button data-v="cols">盯新盘</button><button data-v="list">全部</button></span>
@@ -182,16 +265,16 @@
   <label class="pchip"><input type="checkbox" class="pf" value="gang" checked><span class="pd p-gangv1"></span>Gang</label>
   <label class="pchip"><input type="checkbox" class="pf" value="idagent" checked><span class="pd p-idagent"></span>Flap</label>
   <label class="pchip" title="Flap 普通 Portal 上的 NFT 门槛盘(大多要持有币安 Agent ID 才能在内盘买卖)"><input type="checkbox" class="pf" value="flapportal" checked><span class="pd p-flapportal"></span>Flap 门槛</label>
-  <button class="iconbtn" id="fBtn" style="height:26px">筛选</button>
+  <button class="iconbtn" id="fBtn">筛选</button>
   <span class="faint" id="blockInfo"></span>
-  <span class="status" id="status">加载中…(第一次要回扫 four 历史,约 20 秒)</span>
+  <span class="status" id="status">加载中…</span>
 </div>
 <div class="fpanel" id="fPanel" hidden></div>
 
 <div class="cols" id="colView">
-  <section class="colw" data-col="0"><div class="colh"><b>🆕 新创建</b><span class="cnt" id="n0"></span><span class="faint" style="font-size:11px">2 小时内 · 进度 &lt; 30%</span><span class="pause">⏸ 已暂停(鼠标移开继续)</span></div><div class="colb" id="c0"></div></section>
-  <section class="colw" data-col="1"><div class="colh"><b>🔥 即将打满</b><span class="cnt" id="n1"></span><span class="faint" style="font-size:11px">进度 ≥ 30%</span><span class="pause">⏸ 已暂停(鼠标移开继续)</span></div><div class="colb" id="c1"></div></section>
-  <section class="colw" data-col="2"><div class="colh"><b>🚀 已开盘</b><span class="cnt" id="n2"></span><span class="pause">⏸ 已暂停(鼠标移开继续)</span></div><div class="colb" id="c2"></div></section>
+  <section class="colw" data-col="0"><div class="colh"><b><span data-ic="sprout"></span>新创建</b><span class="cnt" id="n0"></span><span class="faint" style="font-size:11px">2 小时内 · 进度 &lt; 30%</span><span class="pause">⏸ 已暂停(鼠标移开继续)</span></div><div class="colb" id="c0"></div></section>
+  <section class="colw" data-col="1"><div class="colh"><b><span data-ic="fire"></span>即将打满</b><span class="cnt" id="n1"></span><span class="faint" style="font-size:11px">进度 ≥ 30%</span><span class="pause">⏸ 已暂停(鼠标移开继续)</span></div><div class="colb" id="c1"></div></section>
+  <section class="colw" data-col="2"><div class="colh"><b><span data-ic="rocket"></span>已开盘</b><span class="cnt" id="n2"></span><span class="pause">⏸ 已暂停(鼠标移开继续)</span></div><div class="colb" id="c2"></div></section>
 </div>
 <section id="listView" hidden>
   <div class="lbar"><span class="seg" id="stSeg"></span><span class="faint" id="lcount"></span></div>
@@ -211,21 +294,17 @@ const $ = (id) => document.getElementById(id);
 let data = null, running = false;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const short = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "";
-function num(x) {
-  if (x === null || x === undefined || !isFinite(x)) return "—";
-  const a = Math.abs(x);
-  return a >= 1e9 ? (x / 1e9).toFixed(2) + "B" : a >= 1e6 ? (x / 1e6).toFixed(2) + "M" : a >= 1e3 ? (x / 1e3).toFixed(1) + "K" : a >= 1 ? x.toFixed(2) : x.toPrecision(3);
-}
+// 数字 / 时间格式统一走 /fmt.js(三个页面一致)
+function num(x) { return FMT.num(x); }
 function money(x, quote) {
   if (x === null || x === undefined || !isFinite(x)) return "—";
-  if (quote === "BNB" && data?.bnbUsd) return "$" + num(x * data.bnbUsd);
-  return num(x) + " " + esc(quote ?? "");
+  if (quote === "BNB" && data?.bnbUsd) return "$" + FMT.num(x * data.bnbUsd);
+  return FMT.num(x) + " " + esc(quote ?? "");
 }
-function age(ts) {
-  if (!ts) return "";
-  const s = Date.now() / 1000 - ts;
-  return s < 60 ? Math.max(0, Math.round(s)) + "s" : s < 3600 ? Math.round(s / 60) + "m" : s < 86400 ? (s / 3600).toFixed(1) + "h" : (s / 86400).toFixed(1) + "d";
-}
+function age(ts) { return FMT.ago(ts); }   // 「12秒 / 5分 / 5时 / 2天」,需要「前」的地方自己加
+// 单色图标:静态 HTML 里写 <span data-ic="名字" data-sz="12">,这里统一填进去
+const IC = (n, sz = 14) => ICON(n, sz);
+document.querySelectorAll("[data-ic]").forEach((el) => { el.innerHTML = IC(el.dataset.ic, Number(el.dataset.sz) || 14); el.style.display = "inline-flex"; });
 // 令牌不对(服务器换过令牌)时:重新拿页面里的令牌再试一次。被拒的请求服务器什么都没做,重试安全
 async function refreshToken() {
   const html = await fetch(location.pathname, { cache: "no-store" }).then((r) => r.text());
@@ -261,7 +340,7 @@ $("amt").oninput = () => { pref.amt = $("amt").value.trim(); savePref(); render(
 function renderAcct() { document.querySelectorAll("#acctSeg button").forEach((b) => b.classList.toggle("on", b.dataset.v === pref.acct)); }
 document.querySelectorAll("#acctSeg button").forEach((b) => (b.onclick = () => { pref.acct = b.dataset.v; savePref(); renderAcct(); }));
 renderAcct();
-function renderSnd() { $("sndBtn").classList.toggle("on", pref.snd); $("sndBtn").textContent = pref.snd ? "🔔" : "🔕"; }
+function renderSnd() { $("sndBtn").classList.toggle("on", pref.snd); $("sndBtn").innerHTML = IC(pref.snd ? "bell" : "bellOff", 15); }
 $("sndBtn").onclick = () => { pref.snd = !pref.snd; savePref(); renderSnd(); if (pref.snd) beep(); };
 renderSnd();
 function beep() {
@@ -312,7 +391,7 @@ function openFilters() {
       <span class="mute">底池</span><span class="r"><select data-f="quote"><option value="all">全部</option><option value="bnb">BNB</option><option value="other">其他币(GANG / BNCB / 币股…)</option></select></span>
       <span class="mute">其他</span><span class="r"><label class="tog"><input type="checkbox" data-f="favOnly">只看收藏</label><label class="tog"><input type="checkbox" data-f="showBlocked">显示已屏蔽</label></span>
     </div>
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="iconbtn" id="fReset" style="height:28px">清空</button><button class="iconbtn on" id="fClose" style="height:28px">完成</button></div>`;
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="iconbtn" id="fReset">清空</button><button class="iconbtn on" id="fClose">完成</button></div>`;
   p.querySelectorAll("[data-f]").forEach((el) => {
     const k = el.dataset.f;
     if (el.type === "checkbox") el.checked = !!F[k]; else el.value = F[k] ?? "";
@@ -345,25 +424,34 @@ function divTag(t, cls = "tg") {
   return `<span class="${cls} good" title="${head}${more}">分红</span>`;
 }
 // 费率 / 风险标签
+const PDOT = (p) => (p === "four" ? "pd-four" : String(p || "").startsWith("gang") ? "pd-gang" : p === "idagent" || p === "flapportal" ? "pd-flap" : "");
+const PLAT_NAME = { four: "four", gangv1: "Gang V1", gangv2: "Gang V2", gangv3: "Gang V3", idagent: "Flap", flapportal: "Flap 门槛" };
 function tagsOf(t) {
   const out = [];
-  if (t.platform?.startsWith("gang")) { const dv = divTag(t); if (dv) out.push(dv); }
-  if (t.feeBuy != null) out.push(`<span class="tg fee" title="内盘手续费 买 / 卖(链上核对过)">费 ${+t.feeBuy.toFixed(2)}/${t.feeSell != null ? +t.feeSell.toFixed(2) : "?"}%</span>`);
-  if (t.anti > 0) out.push(`<span class="tg bad" title="防狙击税:最近一笔成交时${t.feeAt ? "(" + age(t.feeAt) + "前)" : ""}是这个数,会随开盘时间递减;下单前以报价为准">防狙 ${+t.anti.toFixed(2)}%</span>`);
   const pb = t.postTaxBuy ?? t.postTax, ps = t.postTaxSell ?? t.postTax;
-  if (pb > 0 || ps > 0) out.push(`<span class="tg bad" title="发射后代币税(外盘交易时收)">发射后税 ${+(pb || 0).toFixed(2)}/${+(ps || 0).toFixed(2)}%</span>`);
-  if (t.quote && t.quote !== "BNB") out.push(`<span class="tg q">${esc(t.quote)}</span>`);
+  // 固定顺序:平台 → 底池币(非 BNB)→ 税 → 分红 → 风险(已屏蔽 / 防狙 / 需 Agent ID / 跑路 / Top10 偏高)→ 信息(费 / 聪明钱 / KOL / Top10)
   const g = t.gmgn;
-  if (g) {
-    if (g.top10 !== null && g.top10 !== undefined) out.push(`<span class="tg ${g.top10 > 0.5 ? "bad" : ""}" title="前 10 持仓占比(GMGN)">Top10 ${(g.top10 * 100).toFixed(0)}%</span>`);
-    if (g.smart) out.push(`<span class="tg good" title="聪明钱(GMGN)">聪明钱 ${g.smart}</span>`);
-    if (g.kol) out.push(`<span class="tg good" title="KOL(GMGN)">KOL ${g.kol}</span>`);
-    if (g.rug !== null && g.rug !== undefined && g.rug > 0.3) out.push(`<span class="tg bad" title="跑路风险(GMGN)">跑路 ${(g.rug * 100).toFixed(0)}%</span>`);
-  }
+  if (PLAT_NAME[t.platform]) out.push(`<span class="tg"><i class="pdot ${PDOT(t.platform)}"></i>${PLAT_NAME[t.platform]}</span>`);
+  if (t.quote && t.quote !== "BNB") out.push(`<span class="tg" title="底池币(内盘用它计价)">${esc(t.quote)}</span>`);
+  if (pb > 0 || ps > 0) out.push(`<span class="tg tax" title="发射后代币税 买 / 卖(外盘交易时收)">税 ${+(pb || 0).toFixed(2)}/${+(ps || 0).toFixed(2)}%</span>`);
+  // 只显示「分红」;「不分红」是默认情况,不占位置
+  if (t.platform?.startsWith("gang") && t.dividend) { const dv = divTag(t); if (dv) out.push(dv); }
   if (isBlocked(t)) out.push('<span class="tg bad">已屏蔽</span>');
+  if (t.anti > 0) out.push(`<span class="tg bad" title="防狙击税:最近一笔成交时${t.feeAt ? "(" + age(t.feeAt) + "前)" : ""}是这个数,会随开盘时间递减;下单前以报价为准">防狙 ${+t.anti.toFixed(2)}%</span>`);
+  if (t.platform === "flapportal" && t.nftGate) out.push('<span class="tg gate" title="内盘阶段要持有指定 NFT(大多是币安 Agent ID)才能买卖">需 Agent ID</span>');
+  const top10 = g && g.top10 !== null && g.top10 !== undefined ? `Top10 ${(g.top10 * 100).toFixed(0)}%` : "";
+  if (g && g.rug !== null && g.rug !== undefined && g.rug > 0.3) out.push(`<span class="tg bad" title="跑路风险(GMGN)">跑路 ${(g.rug * 100).toFixed(0)}%</span>`);
+  if (top10 && g.top10 > 0.5) out.push(`<span class="tg bad" title="前 10 持仓占比(GMGN)">${top10}</span>`);
+  if (t.feeBuy != null) {
+    const fb = +t.feeBuy.toFixed(2), fs = t.feeSell != null ? +t.feeSell.toFixed(2) : null;
+    out.push(`<span class="tg fee" title="内盘手续费 买 / 卖(链上核对过)">费 ${fs === null || fs === fb ? fb : fb + "/" + fs}%</span>`);
+  }
+  if (g?.smart) out.push(`<span class="tg info" title="聪明钱(GMGN)">聪明钱 ${g.smart}</span>`);
+  if (g?.kol) out.push(`<span class="tg info" title="KOL(GMGN)">KOL ${g.kol}</span>`);
+  if (top10 && !(g.top10 > 0.5)) out.push(`<span class="tg" title="前 10 持仓占比(GMGN)">${top10}</span>`);
   return out.join("");
 }
-const PL = { four: "F", gangv1: "G1", gangv2: "G2", gangv3: "G3", idagent: "ID", flapportal: "🔒" };
+const PL = { four: "F", gangv1: "G1", gangv2: "G2", gangv3: "G3", idagent: "ID", flapportal: IC("lock", 9) };
 function ring(t, size = "") {
   const p = t.graduated ? 100 : Math.max(0, Math.min(100, t.progress ?? 0));
   const col = t.graduated ? "var(--blue)" : p >= 30 ? "var(--acc)" : "var(--up)";
@@ -371,7 +459,10 @@ function ring(t, size = "") {
 }
 const mcOf = (t) => t.gmgn?.mcapUsd || t.mcapUsd || null;
 const volOf = (t) => t.gmgn?.volume24hUsd || t.volumeUsd || null;
-const buyLabel = (t) => (t.platform.startsWith("gang") && !t.graduated ? "1%" : esc(pref.amt));
+// 快捷买入按钮:Gang 内盘只能按比例买(合约限每个钱包最多 1%),固定「买 1%」;其他盘按顶栏设的 BNB 数量买
+const gangPct = (t) => t.platform.startsWith("gang") && !t.graduated;
+const buyLabel = (t) => (gangPct(t) ? "买 1%" : esc(pref.amt) + " BNB");
+const buyTitle = (t) => (gangPct(t) ? "快捷买入:Gang 内盘按比例买,买总量的 1%(合约限每个钱包最多 1%)" : `快捷买入 ${esc(pref.amt)} BNB(数量在顶栏「快捷买入」里改)`);
 let seenCa = null;   // 第一次渲染后记住已经见过的币,之后新出现的闪一下
 function card(t) {
   const mc = mcOf(t), vol = volOf(t), g = t.gmgn;
@@ -380,15 +471,15 @@ function card(t) {
     ${ring(t)}
     <div class="mid">
       <div class="r1"><span class="sym">${esc(t.symbol)}</span><span class="nm">${esc(t.name && t.name !== t.symbol ? t.name : "")}</span>
-        <span class="acts"><button class="fav ${isFav(t) ? "on" : ""}" data-fav="${esc(t.ca)}" title="${isFav(t) ? "取消收藏" : "收藏"}">${isFav(t) ? "★" : "☆"}</button><button class="blk ${isBlocked(t) ? "on" : ""}" data-blk="${esc(t.ca)}" title="屏蔽">⊘</button></span></div>
-      <div class="r2">${t.createdAt ? `<span class="age">${age(t.createdAt)}</span>` : ""}<span class="ca" data-copy="${esc(t.ca)}" title="点击复制 CA">${short(t.ca)}</span><span class="xs" data-xs="${esc(t.ca)}" title="在 X 上搜这个 CA(看谁在喊)">𝕏</span>${t.creatorHandle ? `<span title="开发者">👤${esc(t.creatorHandle)}</span>` : ""}${t.lastTradeAt ? `<span title="最近成交">· ${age(t.lastTradeAt)}前</span>` : ""}</div>
-      <div class="r3"><span title="持有人">👥 <b>${g?.holders ?? t.holders ?? "—"}</b></span><span title="成交笔数">TX <b>${g?.swaps24h ?? t.txs ?? "—"}</b></span><span title="成交额${g?.volume24hUsd ? "(24h)" : t.volumeLabel ? "(" + t.volumeLabel + ")" : ""}">V <b>${vol ? "$" + num(vol) : money(t.volume, t.quote)}</b></span></div>
+        <span class="acts"><button class="fav ${isFav(t) ? "on" : ""}" data-fav="${esc(t.ca)}" title="${isFav(t) ? "取消收藏" : "收藏"}">${IC(isFav(t) ? "starOn" : "star", 13)}</button><button class="blk ${isBlocked(t) ? "on" : ""}" data-blk="${esc(t.ca)}" title="屏蔽">${IC("ban", 13)}</button></span></div>
+      <div class="r2">${t.createdAt ? `<span class="age" title="创建时间">建 ${age(t.createdAt)}</span>` : ""}<span class="ca" data-copy="${esc(t.ca)}" title="点击复制 CA">${short(t.ca)}</span><span class="xs" data-xs="${esc(t.ca)}" title="在 X 上搜这个 CA(看谁在喊)">𝕏</span>${t.creatorHandle ? `<span class="dev" title="开发者">${esc(t.creatorHandle)}</span>` : ""}${t.lastTradeAt && !(t.createdAt && age(t.lastTradeAt) === age(t.createdAt)) ? `<span class="lt2" title="最近成交">成交 ${age(t.lastTradeAt)}前</span>` : ""}</div>
+      <div class="r3"><span title="持有人">${IC("users", 12)}<b>${g?.holders ?? t.holders ?? "—"}</b></span><span title="成交笔数">TX <b>${g?.swaps24h ?? t.txs ?? "—"}</b></span><span title="成交额${g?.volume24hUsd ? "(24h)" : t.volumeLabel ? "(" + t.volumeLabel + ")" : ""}">V <b>${vol ? "$" + num(vol) : money(t.volume, t.quote)}</b></span></div>
       <div class="tags">${tagsOf(t)}</div>
     </div>
     <div class="rt">
       <span class="mc" title="${t.graduated ? (mc ? "外盘实时市值(DexScreener)" : t.mcapAtGrad ? "外盘没找到池子;毕业时市值 $" + num(t.mcapAtGrad) : "") : ""}">MC <b>${mc ? "$" + num(mc) : "—"}</b></span>
       <span class="pg">${t.graduated ? (t.status && t.status !== "内盘" ? esc(t.status) : "已开盘") : (t.progress ?? 0).toFixed(1) + "%"}</span>
-      <button class="buy" data-buy="${esc(t.ca)}" ${running ? "disabled" : ""} title="快捷买入">⚡ ${buyLabel(t)}</button>
+      <button class="buy" data-buy="${esc(t.ca)}" ${running ? "disabled" : ""} title="${buyTitle(t)}">${IC("bolt", 12)}${buyLabel(t)}</button>
     </div>
   </a>`;
 }
@@ -406,6 +497,19 @@ function baseList() {
   const q = $("q").value.trim().toLowerCase();
   return data.tokens.filter((t) => plats.has(t.platform.startsWith("gang") ? "gang" : t.platform) && passFilters(t) &&
     (!q || (t.symbol ?? "").toLowerCase().includes(q) || (t.name ?? "").toLowerCase().includes(q) || t.ca.includes(q)));
+}
+// 空状态:一行字;开着筛选时附一个「清空筛选」
+function emptyHtml(text, inline = false) {
+  const act = activeFilters() ? ' <button class="eact" data-clearf>清空筛选</button>' : "";
+  return inline ? `${text}${act}` : `<div class="empty">${text}${act}</div>`;
+}
+// 标签放不下时才加右侧淡出
+function markTagOverflow() { document.querySelectorAll(".card .tags").forEach((el) => el.classList.toggle("ovf", el.scrollWidth > el.clientWidth + 1)); }
+window.addEventListener("resize", () => { clearTimeout(markTagOverflow.t); markTagOverflow.t = setTimeout(markTagOverflow, 150); });
+// 第一次加载:每列 3 张骨架卡
+function skeleton() {
+  const sk = '<div class="skc"><i class="s0"></i><div class="sm"><i style="width:45%;height:13px"></i><i style="width:70%;height:10px"></i><i style="width:55%;height:10px"></i><i style="width:80%;height:16px"></i></div></div>';
+  for (let i = 0; i < 3; i++) $("c" + i).innerHTML = sk.repeat(3) + (i === 0 ? '<div class="skhint">第一次运行要回扫 four 历史,约 20 秒</div>' : "");
 }
 // force = 用户自己的操作(改筛选、收藏…),暂停的列也刷新
 function render(force = false) {
@@ -426,8 +530,9 @@ function render(force = false) {
   cols.forEach((c, i) => {
     $("n" + i).textContent = c.length;
     if (paused[i] && !force) return;
-    $("c" + i).innerHTML = c.length ? c.slice(0, 60).map(card).join("") : '<div class="empty">暂无</div>';
+    $("c" + i).innerHTML = c.length ? c.slice(0, 60).map(card).join("") : emptyHtml("暂无");
   });
+  markTagOverflow();
   if (!seenCa) seenCa = new Set(data.tokens.map((t) => t.ca)); else for (const t of data.tokens) seenCa.add(t.ca);
   bindButtons();
 }
@@ -470,9 +575,9 @@ function renderList() {
       <td>${val.holders(t) ?? "—"}</td>
       <td class="mute">${t.lastTradeAt ? age(t.lastTradeAt) + "前" : "—"}</td>
       <td class="mute">${t.createdAt ? age(t.createdAt) + "前" : t.platform === "idagent" ? "#" + t.index : "—"}</td>
-      <td><span class="acts" style="opacity:1;display:inline-flex"><button class="fav ${isFav(t) ? "on" : ""}" data-fav="${esc(t.ca)}">${isFav(t) ? "★" : "☆"}</button><button class="blk ${isBlocked(t) ? "on" : ""}" data-blk="${esc(t.ca)}">⊘</button></span> <button class="buy" data-buy="${esc(t.ca)}" ${running ? "disabled" : ""}>⚡ ${buyLabel(t)}</button></td>
+      <td><span class="acts" style="opacity:1;display:inline-flex"><button class="fav ${isFav(t) ? "on" : ""}" data-fav="${esc(t.ca)}">${IC(isFav(t) ? "starOn" : "star", 13)}</button><button class="blk ${isBlocked(t) ? "on" : ""}" data-blk="${esc(t.ca)}">${IC("ban", 13)}</button></span> <button class="buy" data-buy="${esc(t.ca)}" ${running ? "disabled" : ""} title="${buyTitle(t)}">${IC("bolt", 12)}${buyLabel(t)}</button></td>
     </tr>`;
-  }).join("") || `<tr><td colspan="9" class="empty">${view.st === "mine" && !mine ? "读取持仓中…" : "没有符合条件的币"}</td></tr>`;
+  }).join("") || `<tr><td colspan="9" class="empty">${view.st === "mine" && !mine ? "读取持仓中…" : emptyHtml("没有符合条件的币", true)}</td></tr>`;
   $("lmore").textContent = list.length > view.limit ? `已显示 ${view.limit} / ${list.length},往下滚或点这里加载更多` : list.length ? "到底了" : "";
   bindButtons();
 }
@@ -498,6 +603,7 @@ function bindButtons() {
     listOp({ op: "fav", ca: b.dataset.fav, on: !isFav(t), symbol: t?.symbol, platform: t?.platform });
   }));
   document.querySelectorAll("[data-blk]").forEach((b) => (b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); openBlockMenu(b, data.tokens.find((x) => x.ca === b.dataset.blk)); }));
+  document.querySelectorAll("[data-clearf]").forEach((b) => (b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); Object.assign(F, FDEF); saveF(); view.limit = 100; render(true); }));
   document.querySelectorAll("[data-buy]").forEach((b) => (b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); quickBuy(b.dataset.buy); }));
   document.querySelectorAll("[data-xs]").forEach((x) => (x.onclick = (e) => { e.preventDefault(); e.stopPropagation(); window.open("https://x.com/search?q=" + x.dataset.xs + "&f=live", "_blank", "noopener"); }));
   document.querySelectorAll("[data-copy]").forEach((x) => (x.onclick = (e) => {
@@ -612,6 +718,7 @@ function startStream() {
     }
   };
 }
+skeleton();
 loadLists();
 startStream();
 setMode(view.mode === "list" ? "list" : "cols");

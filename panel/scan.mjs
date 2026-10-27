@@ -8,7 +8,7 @@ import { logRpc, HAS_PRIVATE, PUBLIC_WINDOW } from "./logrpc.mjs";
 import { fileURLToPath } from "node:url";
 import { ethers } from "ethers";
 import { provider, dexUsd, divOf } from "./detect.mjs";
-import { gatedList, portalState, metaOf, markDex } from "./flapnft.mjs";
+import { gatedList, portalState, metaOf, markDex, FLAP_PORTAL, portalStateCall, parsePortalState } from "./flapnft.mjs";
 import { kickGmgn, gmgnInfo, gmgnStatus } from "./enrich.mjs";
 
 const CACHE = fileURLToPath(new URL("./scan-cache.json", import.meta.url));
@@ -301,10 +301,17 @@ export async function scan({ force = false } = {}) {
 // ---------- Flap 门槛盘(Agent ID 等 NFT 门槛,登记表来自 Portal 链上事件) ----------
 async function flapRows(c) {
   const list = gatedList();
+  // 还在内盘的门槛盘:一次 multicall 读完所有状态(以前一个盘一个请求,和别的扫链请求挤在一起会被节点限流)
+  const live = list.filter((g) => !g.dex);
+  const states = new Map();
+  if (live.length) {
+    const res = await multicall(live.map((g) => [FLAP_PORTAL, portalStateCall(g.ca)]));
+    live.forEach((g, i) => { if (res[i]?.success) { try { states.set(g.ca, parsePortalState(res[i].returnData)); } catch {} } });
+  }
   const rows = [];
   for (let i = 0; i < list.length; i += 10) {
     rows.push(...(await Promise.all(list.slice(i, i + 10).map(async (g) => {
-      const st = g.dex ? null : await portalState(g.ca).catch(() => null);
+      const st = g.dex ? null : states.get(g.ca) ?? null;
       if (st?.status === 4) markDex(g.ca);
       const graduated = !!g.dex || st?.status === 4;
       const m = await metaOf(g.ca);
@@ -319,14 +326,25 @@ async function flapRows(c) {
   }
   return rows;
 }
+// 某一组(Gang / Flap 内盘 / 门槛盘)这一轮没拉下来:先用上一次的数据,提示只写一句人话(原始报错打到日志里)
+const lastGood = {};
+function group(name, fn, errors) {
+  return fn().then((rows) => { lastGood[name] = rows; return rows; }).catch((e) => {
+    const msg = String(e?.message ?? e);
+    console.error(`[扫链] ${name} 没刷新:`, msg.slice(0, 300));
+    const why = /rate limit|-32005|429|Too Many/i.test(msg) ? "节点限流" : /timeout|ETIMEDOUT|aborted/i.test(msg) ? "超时" : "出错";
+    errors.push(`${name}:${why}${lastGood[name] ? ",先显示上次的数据" : ",稍后自动重试"}`);
+    return lastGood[name] ?? [];
+  });
+}
 async function scanFresh() {
   const errors = [];
   const c0 = await blockTime().catch(() => null);
   const [gang, idAgent, flapG] = await Promise.all([
-    gangRows().catch((e) => (errors.push("Gang:" + e.message), [])),
-    idAgentRows().catch((e) => (errors.push("Flap 内盘:" + e.message), [])),
-    flapRows(c0).catch((e) => (errors.push("Flap 门槛盘:" + e.message), [])),
-    syncFour().catch((e) => errors.push("four:" + e.message)),
+    group("Gang", gangRows, errors),
+    group("Flap 内盘", idAgentRows, errors),
+    group("Flap 门槛盘", () => flapRows(c0), errors),
+    syncFour().catch((e) => { const m = String(e?.message ?? e); console.error("[扫链] four 没刷新:", m.slice(0, 300)); errors.push("four:" + (/rate limit|-32005|429|Too Many/i.test(m) ? "节点限流" : /timeout|aborted/i.test(m) ? "超时" : "出错") + ",先显示已有的数据"); }),
   ]);
   const c = await blockTime().catch(() => null);
   const fourRows = Object.values(four.tokens).map((t) => ({
@@ -380,6 +398,8 @@ export function scanLite(data) {
       ca: t.ca, symbol: t.symbol, name: t.name, platform: t.platform, platformLabel: t.platformLabel, index: t.index, creator: t.creator,
       progress: t.progress, graduated: t.graduated, createdAt: t.createdAt, graduatedAt: t.graduatedAt, lastTradeAt: t.lastTradeAt,
       mcapUsd: t.mcapUsd, holders: t.holders, gmgn: t.gmgn ? { mcapUsd: t.gmgn.mcapUsd } : undefined,
+      // 交易页左侧扫链栏的标签用
+      quote: t.quote, postTax: t.postTax, postTaxBuy: t.postTaxBuy, postTaxSell: t.postTaxSell, dividend: t.dividend, dividendPct: t.dividendPct, nftGate: t.nftGate ? true : undefined, anti: t.anti || undefined,
     })),
   };
 }

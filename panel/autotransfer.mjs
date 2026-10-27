@@ -44,7 +44,8 @@ export async function setTarget(to, ownAddresses = []) {
   if ((old ?? "").toLowerCase() === v.toLowerCase()) return { to: old, turnedOff: 0 };
   writeCfg({ ...readCfg(), to: v ? ethers.getAddress(v) : "" });
   let turnedOff = 0;
-  for (const t of Object.values(state.tokens)) if (t.on && !Object.keys(t.done ?? {}).length) { t.on = false; turnedOff++; }
+  // 所有开着的币都关掉(包括已经有一个号转完、另一个号还没转的):剩下的号不能不经确认就转到新地址
+  for (const t of Object.values(state.tokens)) if (t.on) { t.on = false; turnedOff++; }
   save();
   await tg(v ? `🔑 发射后自动转出的目标地址改成了\n<code>${v}</code>\n(原来:${old ?? "没设"})。已关闭 ${turnedOff} 个开关,需要按新地址重新打开。不是你改的请马上检查面板。`
     : `🔑 发射后自动转出的目标地址已清空(原来 ${old ?? "没设"}),功能已关闭。`);

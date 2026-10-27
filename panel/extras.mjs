@@ -25,6 +25,7 @@ export function setSettings(b) {
 }
 // 下单前检查单笔上限(按 BNB 买入;按比例买时用报出来的花费)
 export function checkMaxBuy(bnb) {
+  if (S.maxBuyBnb > 0 && !(Number(bnb) > 0)) throw new Error(`算不出这笔折合多少 BNB,设了单笔上限 ${S.maxBuyBnb} BNB 时不下单;请改用按 BNB 数量买`);
   if (S.maxBuyBnb > 0 && Number(bnb) > S.maxBuyBnb) throw new Error(`超过单笔上限 ${S.maxBuyBnb} BNB(这笔约 ${Number(bnb).toPrecision(4)} BNB);要改上限去账户总览的「设置」`);
 }
 

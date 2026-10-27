@@ -6,6 +6,8 @@
 <title>TIGER POWER · 钱包追踪</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <script src="/i18n.js"></script>
+<script src="/fmt.js"></script>
+<script src="/icons.js"></script>
 <script src="/update.js" defer></script>
 <style>
   :root {
@@ -118,23 +120,83 @@
   @media (max-width:1600px) { .brand .tmsub { display:none; } .xlink span { display:none; } }
   @media (max-width:1500px) { .top { gap:10px; } .searchwrap, .search { min-width:120px; } }
   @media (max-width:1300px) { .livetag { display:none; } .clipchip.ask { display:none; } }
+
+  /* ===== 统一设计规范(三个页面共用;放在样式最后,覆盖前面各写各的) =====
+     颜色只表达「需要你注意」的事:税 = 琥珀,分红 = 绿,门槛 / 风险 / 暂停 = 红,费用和数据提示 = 蓝;
+     平台、底池币等信息一律中性灰,平台前面加一个小色点(和扫链头像角标同一组颜色)。标签字重 500,让币名和价格最显眼。 */
+  :root {
+    --faint:#6f7889;
+    --tg-neutral:#b4bcc8; --tg-neutral-bg:#1f2530;
+    --tg-tax:#e8b04a;  --tg-tax-bg:rgba(232,176,74,.13);
+    --tg-div:#3fcf98;  --tg-div-bg:rgba(22,199,132,.13);
+    --tg-risk:#ff6b74; --tg-risk-bg:rgba(234,57,67,.14);
+    --tg-info:#8fb3ff; --tg-info-bg:rgba(59,130,246,.13);
+    --pc-four:#e0b23a; --pc-gang:#d77aa8; --pc-flap:#9b86e0;
+  }
+  /* 顶栏:三个页面同样高度、间距、控件高度 */
+  .top { flex:0 0 50px; height:50px; gap:12px; padding:0 14px; }
+  .search, .clipchip, .wchip { height:32px; }
+  /* 打赏:次级按钮,不闪不渐变 */
+  .tipbtn { animation:none; background:var(--s2); color:var(--acc); border:1px solid rgba(240,185,11,.4); box-shadow:none; padding:5px 12px; font-weight:700; font-size:12.5px; border-radius:8px; }
+  .tipbtn:hover { border-color:var(--acc); filter:none; box-shadow:none; }
+  /* 标签:一个规格 */
+  .tg, .mtags .mtg, .badges .bdg, .tlist .tag, .ctab .tag {
+    display:inline-flex; align-items:center; gap:5px; height:20px; line-height:20px; padding:0 7px; border:0; border-radius:4px;
+    font-size:11.5px; font-weight:500; white-space:nowrap; box-sizing:border-box; background:var(--tg-neutral-bg); color:var(--tg-neutral);
+  }
+  .tg.tax, .mtags .mtg.k-tax, .badges .bdg.tax { color:var(--tg-tax); background:var(--tg-tax-bg); }
+  .tg.good, .mtags .mtg.k-div, .badges .bdg.good { color:var(--tg-div); background:var(--tg-div-bg); }
+  .tg.bad, .tg.gate, .mtags .mtg.k-bad, .badges .bdg.bad, .tag.realtag { color:var(--tg-risk); background:var(--tg-risk-bg); }
+  .tg.fee, .tg.info, .badges .bdg.info { color:var(--tg-info); background:var(--tg-info-bg); }
+  .pdot { width:6px; height:6px; border-radius:50%; flex:none; display:inline-block; }
+  .pd-four { background:var(--pc-four); } .pd-gang { background:var(--pc-gang); } .pd-flap { background:var(--pc-flap); } .pd-in { background:var(--up); } .pd-out { background:var(--blue, #3b82f6); }
+  /* 扫链头像角标:和平台色点同一组颜色 */
+  .p-four { background:var(--pc-four); } .p-gangv1, .p-gangv2, .p-gangv3 { background:var(--pc-gang); } .p-idagent, .p-flapportal { background:var(--pc-flap); }
+
+  /* 一页只留一个主按钮:跟单页的「新建跟单」改成次级按钮 */
+  #cpNew { background:var(--s2); color:var(--text); border:1px solid var(--line2); }
+
+  /* ===== 追踪页整理(只作用于本页) ===== */
+  .top .tspacer { flex:1; min-width:0; }
+  .tk-ic { display:inline-flex; vertical-align:-2px; margin-right:5px; } .setmenu .mi.tk-ic { margin-right:0; justify-content:center; color:var(--mute); }
+  .toast .tk-ic { margin-right:6px; color:var(--acc); }
+  .sw .tk-ic { margin-right:0; }
+  /* 左侧「添加关注」:次级描边按钮(一页只留一个实心金色主按钮) */
+  .btn.tk-sec { background:var(--s2); color:var(--acc); border:1px solid rgba(240,185,11,.4); font-weight:700; }
+  .btn.tk-sec:hover:not(:disabled) { border-color:var(--acc); }
+  /* 动态表:限宽;复制 / 𝕏 只在悬停时出现(占位不变) */
+  table.tk-feed { max-width:1100px; }
+  .tk-feed .cal .tk-hov { display:inline-flex; gap:6px; visibility:hidden; } .tk-feed tr:hover .cal .tk-hov { visibility:visible; }
+  .tk-feed .tk-ops { text-align:right; } .tk-feed .tk-ops .go { color:var(--acc); text-decoration:none; font-weight:600; } .tk-feed .tk-ops .go:hover { text-decoration:underline; }
+  .tk-feed .tk-tx { display:inline-flex; vertical-align:-2px; margin-left:8px; color:var(--faint); } .tk-feed .tk-tx:hover { color:var(--text); }
+  .tk-sk td { height:52px; } .tk-sk div { height:14px; border-radius:4px; background:linear-gradient(90deg,var(--s2),var(--s3),var(--s2)); background-size:200% 100%; animation:tksk 1.2s linear infinite; }
+  @keyframes tksk { from { background-position:200% 0; } to { background-position:0 0; } }
+  /* 空状态:一行,可带一个操作 */
+  .empty { padding:14px 16px; text-align:left; display:flex; align-items:center; gap:10px; flex-wrap:wrap; color:var(--faint); }
+  .tk-emact { height:24px; padding:0 10px; border-radius:6px; background:var(--s2); border:1px solid var(--line2); color:var(--text); font-size:12px; }
+  .tk-emact:hover { border-color:var(--acc); }
+  /* 分段控件:两种尺寸 —— 小 24px / 圆角 6,中 30px / 圆角 7 */
+  .seg button, .groups button { height:24px; border-radius:6px; padding:0 9px; font-size:12px; display:inline-flex; align-items:center; }
+  .vtabs { padding:0; border-radius:7px; } .vtabs button { height:30px; border-radius:7px; padding:0 12px; font-size:13px; display:inline-flex; align-items:center; }
+  .kill { height:30px; border-radius:7px; }
 </style>
 </head>
 <body>
 <div class="top">
   <div class="brand"><svg class="tmlogo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="tmg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F8D33A"/><stop offset="1" stop-color="#E8890C"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#tmg)"/><path d="M5 10.5H14.5M9.75 10.5V23M18.5 23V10.5H23.25A3.5 3.5 0 0 1 23.25 17.5H18.5" fill="none" stroke="#1a1300" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>TIGER POWER</span><small class="tmsub">内盘终端</small></div>
   <div class="nav"><a href="/">交易</a><a href="/scan">扫链</a><a href="/track" class="on">追踪</a></div>
-  <div class="setwrap"><button class="setbtn" id="setBtn" title="钱包、转账、设置、授权">⚙ 钱包 / 设置</button><div class="setmenu" id="setMenu" hidden><a href="/?go=secWallets" class="setitem"><span class="mi">👛</span><span><b>钱包与持仓</b><small>余额、登录状态、全部持仓和盈亏</small></span></a><a href="/?go=sendBox" class="setitem"><span class="mi">💸</span><span><b>转账</b><small>BNB / 代币转到任意地址</small></span></a><a href="/?go=secSettings" class="setitem"><span class="mi">⚙</span><span><b>设置</b><small>单笔上限、发射后自动转出、自动领取</small></span></a><a href="/?go=secQuotes" class="setitem"><span class="mi">🪙</span><span><b>底池币余额</b><small>内盘卖出后剩下的,一键换回 BNB</small></span></a><a href="/?go=secApprovals" class="setitem"><span class="mi">🔐</span><span><b>授权管理</b><small>查看 / 撤销代币授权</small></span></a></div></div>
-  <a class="tipbtn" href="/?tip=1" title="请作者喝杯咖啡">☕ 打赏作者</a>
-  <a class="xlink" href="https://x.com/tiger_web3" target="_blank" rel="noopener" title="作者推特 @tiger_web3"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg><span>@tiger_web3</span></a>
+  <span class="tspacer"></span>
   <span class="livetag" id="liveTag"><span class="dot" id="liveDot"></span>实时</span>
+  <div class="setwrap"><button class="setbtn" id="setBtn" title="钱包、转账、设置、授权"><span data-ic="gear"></span>钱包 / 设置</button><div class="setmenu" id="setMenu" hidden><a href="/?go=secWallets" class="setitem"><span class="mi" data-ic="wallet" data-ics="16"></span><span><b>钱包与持仓</b><small>余额、登录状态、全部持仓和盈亏</small></span></a><a href="/?go=sendBox" class="setitem"><span class="mi" data-ic="ext" data-ics="16"></span><span><b>转账</b><small>BNB / 代币转到任意地址</small></span></a><a href="/?go=secSettings" class="setitem"><span class="mi" data-ic="gear" data-ics="16"></span><span><b>设置</b><small>单笔上限、发射后自动转出、自动领取</small></span></a><a href="/?go=secQuotes" class="setitem"><span class="mi" data-ic="refresh" data-ics="16"></span><span><b>底池币余额</b><small>内盘卖出后剩下的,一键换回 BNB</small></span></a><a href="/?go=secApprovals" class="setitem"><span class="mi" data-ic="lock" data-ics="16"></span><span><b>授权管理</b><small>查看 / 撤销代币授权</small></span></a></div></div>
+  <a class="tipbtn" href="/?tip=1" title="请作者喝杯咖啡"><span data-ic="coffee"></span>打赏作者</a>
+  <a class="xlink" href="https://x.com/tiger_web3" target="_blank" rel="noopener" title="作者推特 @tiger_web3"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg><span>@tiger_web3</span></a>
 </div>
 <div class="main">
   <aside class="side">
     <div class="add">
       <input id="aIn" placeholder="地址 0x… 或 .ai / .bnb 名字" spellcheck="false" autocomplete="off">
       <div class="row"><input id="aRm" placeholder="备注(可选)" maxlength="80"><select id="aGrp" style="flex:0 0 96px"></select></div>
-      <div class="row"><button class="btn" id="aGo" style="flex:1">添加关注</button></div>
+      <div class="row"><button class="btn tk-sec" id="aGo" style="flex:1">添加关注</button></div>
       <div class="faint" style="font-size:11px">新加的地址会自动补出最近 24 小时的内盘买卖</div>
     </div>
     <div class="groups" id="groups"></div>
@@ -145,8 +207,8 @@
       <div class="vtabs"><button id="tabFeed" class="on">追踪动态</button><button id="tabCopy">跟单</button></div>
       <h2 id="fTitle">全部动态</h2>
       <span class="note" id="fNote"></span>
-      <button class="kill" id="killBtn" hidden title="所有跟单任务立刻停止下单">⏸ 全部暂停</button>
-      <label class="sw" style="margin-left:auto"><input type="checkbox" id="sndOn"> 提示音</label>
+      <button class="kill" id="killBtn" hidden title="所有跟单任务立刻停止下单">全部暂停</button>
+      <label class="sw" style="margin-left:auto"><input type="checkbox" id="sndOn"><span data-ic="bell"></span>提示音</label>
     </div>
     <div class="feed" id="feed"></div>
     <div class="feed copyview" id="copyView" hidden></div>
@@ -193,16 +255,11 @@ let TOKEN = TOKEN_INIT;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const short = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "";
-function num(x) {
-  if (x === null || x === undefined || !isFinite(x)) return "—";
-  const a = Math.abs(x);
-  return a >= 1e9 ? (x / 1e9).toFixed(2) + "B" : a >= 1e6 ? (x / 1e6).toFixed(2) + "M" : a >= 1e3 ? (x / 1e3).toFixed(1) + "K" : a >= 1 ? x.toFixed(2) : x.toPrecision(3);
-}
-function age(ts) {
-  if (!ts) return "";
-  const s = Date.now() / 1000 - ts;
-  return s < 60 ? Math.max(0, Math.round(s)) + "秒前" : s < 3600 ? Math.round(s / 60) + "分前" : s < 86400 ? (s / 3600).toFixed(1) + "时前" : (s / 86400).toFixed(1) + "天前";
-}
+// 数字 / 时间统一走 /fmt.js;age 带「前」
+function num(x, d) { return FMT.num(x, d); }
+const age = (ts) => ts ? FMT.ago(ts) + "前" : "";
+// 静态按钮上的单色图标(data-ic="名字",data-ics 可选尺寸)
+document.querySelectorAll("[data-ic]").forEach((el) => { el.classList.add("tk-ic"); el.innerHTML = ICON(el.dataset.ic, +el.dataset.ics || 14); });
 const fullTime = (ts) => new Date(ts * 1000).toLocaleString();
 const PF = { four: "four", gangv1: "Gang V1", gangv2: "Gang V2", idagent: "Flap 内盘" };
 async function refreshToken() {
@@ -220,8 +277,8 @@ async function post(path, body = {}) {
   return d;
 }
 // ca:带上代币地址时这条提示可以点,点了打开这个币(交易页)
-function toast(msg, kind = "", ca = null) {
-  const t = document.createElement("div"); t.className = "toast " + kind + (ca ? " click" : ""); t.textContent = msg;
+function toast(msg, kind = "", ca = null, ic = null) {
+  const t = document.createElement("div"); t.className = "toast " + kind + (ca ? " click" : ""); t.innerHTML = (ic ? `<span class="tk-ic">${ICON(ic, 13)}</span>` : "") + esc(msg);
   if (ca) { t.title = "点击打开 " + ca; t.onclick = () => { t.remove(); location.href = "/?ca=" + ca; }; }
   $("toasts").appendChild(t); setTimeout(() => t.remove(), kind === "err" ? 9000 : ca ? 8000 : 5000);
 }
@@ -256,7 +313,7 @@ function renderSide() {
         <button class="cpy" data-copyt="${t.address}" title="跟单这个地址">跟单</button><button class="x" data-del="${t.address}" title="取消关注">✕</button></div>
       <div class="r2"><span class="mono">${short(t.address)}</span>${last[t.address] ? `<span>最近 ${age(last[t.address])}</span>` : ""}</div>
       <div class="rm" data-rm="${t.address}" title="点击编辑备注">${esc(t.remark)}</div>
-    </div>`).join("") : '<div class="empty">还没有关注的地址<br>在上面填地址或 .ai 名字</div>';
+    </div>`).join("") : '<div class="empty"><span>还没有关注的地址</span><span class="faint">在上面填地址或 .ai 名字</span></div>';
   $("tlist").querySelectorAll(".titem").forEach((el) => (el.onclick = (e) => {
     if (e.target.closest("[data-del],[data-rm],[data-copyt]")) return;
     sel = sel === el.dataset.a ? null : el.dataset.a; renderSide(); renderHead(); loadFeed();
@@ -287,16 +344,22 @@ function row(e, isNew) {
     <td><span class="who" data-who="${e.target}">${esc(e.targetName || short(e.target))}</span></td>
     <td><span class="act ${esc(e.action)}">${esc(e.action)}</span>${e.pct ? ` <span class="faint">${e.pct.toFixed(0)}%</span>` : ""}</td>
     <td><span class="tok" data-ca="${e.ca}" title="在交易页打开">${esc(e.symbol)}</span> <span class="pf">${esc(plat)}</span>
-      <div class="cal"><span class="mono" title="${e.ca}">${short(e.ca)}</span><button class="cp" data-copy="${e.ca}" title="复制 CA">复制</button><a class="cp" href="https://x.com/search?q=${e.ca}&f=live" target="_blank" rel="noopener" title="在 X 上搜这个 CA(看谁在喊)" style="text-decoration:none">𝕏</a><a class="go" href="/?ca=${e.ca}" target="_blank" rel="noopener" title="在交易页打开这个币">去交易 →</a></div></td>
-    <td class="num ${e.side === "buy" ? "up" : "down"}">${num(e.quoteAmt)} <span class="faint">${esc(e.quote)}</span></td>
-    <td class="num mute">${e.usd ? "$" + num(e.usd) : ""}</td>
-    <td class="num faint">${num(e.tokens)} 个</td>
-    <td><a class="faint" href="https://bscscan.com/tx/${e.tx}" target="_blank" rel="noopener">交易 ↗</a></td>
+      <div class="cal"><span class="mono" title="${e.ca}">${short(e.ca)}</span><span class="tk-hov"><button class="cp" data-copy="${e.ca}" title="复制 CA">复制</button><a class="cp" href="https://x.com/search?q=${e.ca}&f=live" target="_blank" rel="noopener" title="在 X 上搜这个 CA(看谁在喊)" style="text-decoration:none">𝕏</a></span></div></td>
+    <td class="num"><span class="${e.side === "buy" ? "up" : "down"}">${num(e.quoteAmt)}</span> <span class="faint">${esc(e.quote)}</span>${e.usd ? ` <span class="mute">≈$${num(e.usd)}</span>` : ""}</td>
+    <td class="num faint">${num(e.tokens)}</td>
+    <td class="tk-ops"><a class="go" href="/?ca=${e.ca}" target="_blank" rel="noopener" title="在交易页打开这个币">去交易</a><a class="tk-tx" href="https://bscscan.com/tx/${e.tx}" target="_blank" rel="noopener" title="在 BscScan 看这笔交易">${ICON("ext", 12)}</a></td>
   </tr>`;
 }
+// 加载中:3 行固定高度的骨架
+const SKEL = `<table class="tk-feed"><tbody>${'<tr class="tk-sk"><td colspan="7"><div></div></td></tr>'.repeat(3)}</tbody></table>`;
 function renderFeed(newIds = new Set()) {
-  if (!items.length) { $("feed").innerHTML = `<div class="empty">${loading ? "加载中…" : L.targets.length ? "还没有动态(这些地址在内盘有买卖就会出现在这里)" : "先在左边添加要关注的地址"}</div>`; return; }
-  $("feed").innerHTML = `<table><thead><tr><th>时间</th><th>谁</th><th>动作</th><th>代币</th><th>金额</th><th>美元</th><th>数量</th><th></th></tr></thead><tbody>${items.map((e) => row(e, newIds.has(e.id))).join("")}</tbody></table>` +
+  if (!items.length) {
+    $("feed").innerHTML = loading ? SKEL : L.targets.length ? '<div class="empty">还没有动态(这些地址在内盘有买卖就会出现在这里)</div>'
+      : '<div class="empty"><span>先在左边添加要关注的地址</span><button class="tk-emact" id="emAdd">添加地址</button></div>';
+    $("emAdd")?.addEventListener("click", () => $("aIn").focus());
+    return;
+  }
+  $("feed").innerHTML = `<table class="tk-feed"><thead><tr><th>时间</th><th>谁</th><th>动作</th><th>代币</th><th>金额</th><th>代币数</th><th></th></tr></thead><tbody>${items.map((e) => row(e, newIds.has(e.id))).join("")}</tbody></table>` +
     (more ? '<div class="more"><button id="moreBtn">加载更早的</button></div>' : "");
   $("feed").querySelectorAll("[data-ca]").forEach((x) => (x.onclick = () => window.open("/?ca=" + x.dataset.ca, "_blank")));
   $("feed").querySelectorAll("[data-copy]").forEach((b) => (b.onclick = () => navigator.clipboard?.writeText(b.dataset.copy).then(() => { b.textContent = "已复制"; setTimeout(() => (b.textContent = "复制"), 900); }, () => toast("复制失败", "err"))));
@@ -337,7 +400,7 @@ function startStream() {
     if (ev.type !== "track") return;
     const t = L.targets.find((x) => x.address === ev.target);
     if ($("sndOn").checked) beep();
-    toast(`👁 ${ev.targetName || short(ev.target)} ${ev.action} ${ev.symbol} ${num(ev.quoteAmt)} ${ev.quote}`, ev.side === "buy" ? "ok" : "err", ev.ca);
+    toast(`${ev.targetName || short(ev.target)} ${ev.action} ${ev.symbol} ${FMT.amt(ev.quoteAmt, ev.quote)}`, ev.side === "buy" ? "ok" : "err", ev.ca, "bell");
     if (sel ? ev.target !== sel : grp !== "all" && t?.group !== grp) return;
     if (items.some((x) => x.id === ev.id)) return;
     items.unshift(ev); renderFeed(new Set([ev.id])); renderSide();
@@ -358,7 +421,7 @@ function renderCopyTab() {
   const run = CP.tasks.filter((t) => t.status === "running"), real = run.filter((t) => !t.params.dryRun).length;
   $("tabCopy").innerHTML = `跟单${run.length ? ` <span class="pill ${real ? "real" : ""}">${run.length}${real ? " 真实" : ""}</span>` : ""}`;
   $("killBtn").hidden = !CP.tasks.some((t) => t.status === "running") && !CP.paused;
-  $("killBtn").textContent = CP.paused ? "▶ 恢复跟单" : "⏸ 全部暂停";
+  $("killBtn").textContent = CP.paused ? "恢复跟单" : "全部暂停";
   $("killBtn").classList.toggle("on", CP.paused);
 }
 function setView(v) {
@@ -382,12 +445,12 @@ function renderCopy() {
     return `<tr><td><b>${esc(t.name)}</b> <span class="tag ${p.dryRun ? "" : "realtag"}">${p.dryRun ? "模拟" : "真实下单"}</span><div class="faint mono" style="font-size:11px">${short(t.target)}</div><div class="faint" style="font-size:11px">${esc(summary(p))}</div></td>
       <td class="num">${n}${p.maxCopies ? " / " + p.maxCopies : ""} 次<div class="faint">${t.stats.buys} 买 · ${t.stats.sells} 卖${p.dryRun ? ` · 模拟 ${t.stats.sims}` : ""}</div></td>
       <td class="num">${num(t.stats.buyBnb)} BNB<div class="faint">持有 ${open} 个币</div></td>
-      <td class="faint">${t.stats.lastAt ? age(Math.floor(t.stats.lastAt / 1000)) + "前" : "—"}</td>
+      <td class="faint">${t.stats.lastAt ? age(Math.floor(t.stats.lastAt / 1000)) : "—"}</td>
       <td>${st(t)}</td><td class="ops">${ops(t)}</td></tr>`;
   }).join("");
   const logs = CP.log.slice(0, 200).map((e) => {
     const [k, cls] = KIND[e.kind] ?? [e.kind, ""];
-    return `<tr><td class="faint">${age(e.ts)}前</td><td>${esc(e.taskName)}</td><td><span class="lk ${cls}">${k}</span></td>
+    return `<tr><td class="faint">${age(e.ts)}</td><td>${esc(e.taskName)}</td><td><span class="lk ${cls}">${k}</span></td>
       <td>${e.token ? `<span class="tok" data-ca="${e.token}">${esc(e.symbol ?? short(e.token))}</span>` : ""}${e.action ? ` <span class="faint">${esc(e.action)}</span>` : ""}</td>
       <td class="lr">${esc(e.reason)}${e.results ? `<div class="faint">${Object.entries(e.results).map(([a, r]) => `账号${a} ${r.ok ? "✓" : "✗"} ${esc((r.last ?? []).join(" ").slice(0, 120))}`).join("<br>")}</div>` : ""}</td></tr>`;
   }).join("");
@@ -395,10 +458,12 @@ function renderCopy() {
       <div class="seg"><button class="${cpHist ? "" : "on"}" data-hist="0">活跃</button><button class="${cpHist ? "on" : ""}" data-hist="1">历史</button></div>
       <span class="faint" style="font-size:12px">对方在内盘(four / Gang / Flap)买卖时触发;靠追踪的实时动态,面板要开着才会跟</span></div>
     ${list.length ? `<table class="ctab"><thead><tr><th>任务</th><th>已跟</th><th>总买入</th><th>最近</th><th>状态</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
-      : `<div class="empty">${cpHist ? "没有已关闭的任务" : "还没有跟单任务:点「＋ 新建跟单」,或在左边关注列表里点地址旁的「跟单」"}</div>`}
+      : cpHist ? '<div class="empty">没有已关闭的任务</div>'
+      : '<div class="empty"><span>还没有跟单任务</span><button class="tk-emact" id="cpNew2">＋ 新建跟单</button><span class="faint">或在左边地址旁点「跟单」</span></div>'}
     <div class="lhead">跟单记录 <span class="faint">(每次决定都记:下单 / 模拟 / 跳过和原因)</span></div>
-    ${logs ? `<table class="ltab"><tbody>${logs}</tbody></table>` : '<div class="empty" style="padding:20px">还没有记录</div>'}`;
+    ${logs ? `<table class="ltab"><tbody>${logs}</tbody></table>` : '<div class="empty">还没有记录</div>'}`;
   $("cpNew").onclick = () => openCopyDlg(sel);
+  $("cpNew2")?.addEventListener("click", () => openCopyDlg(sel));
   $("copyView").querySelectorAll("[data-hist]").forEach((b) => (b.onclick = () => { cpHist = b.dataset.hist === "1"; renderCopy(); }));
   $("copyView").querySelectorAll("[data-cedit]").forEach((b) => (b.onclick = () => openCopyDlg(null, CP.tasks.find((t) => t.id === b.dataset.cedit))));
   $("copyView").querySelectorAll("[data-cdel]").forEach((b) => (b.onclick = async () => { if (confirm("删除这个已关闭的任务?(记录保留)")) { try { await post("/api/copy/tasks", { id: b.dataset.cdel, delete: true }); } catch (e) { toast(e.message, "err"); } } }));

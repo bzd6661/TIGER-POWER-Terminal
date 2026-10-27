@@ -36,8 +36,11 @@ const lc = (a) => String(a ?? "").toLowerCase();
 
 // ---------- 链上状态:getTokenV8Safe(按 32 字节字读) ----------
 // 字 0 status(1 内盘 / 4 已发射)· 1 reserve · 2 流通量 · 3 价格(报价币 / 个)· 8 发射门槛 · 9 报价币 · 10 能否直接用 BNB · 15 进度(1e18 = 100%)
+export const portalStateCall = (ca) => "0x62fafcca" + ethers.zeroPadValue(ca, 32).slice(2);
 export async function portalState(ca) {
-  const raw = await provider.call({ to: FLAP_PORTAL, data: "0x62fafcca" + ethers.zeroPadValue(ca, 32).slice(2) });
+  return parsePortalState(await provider.call({ to: FLAP_PORTAL, data: portalStateCall(ca) }));
+}
+export function parsePortalState(raw) {
   if (!raw || raw.length < 2 + 64 * 16) return null;
   const w = (i) => BigInt("0x" + raw.slice(2 + 64 * i, 2 + 64 * (i + 1)));
   const status = Number(w(0));
