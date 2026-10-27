@@ -32,7 +32,7 @@ const cache = new Map();   // ca → { at, data }
 
 
 async function gangTrades(ca, v2) {
-  const j = await fetch(`https://gang.fun/api/${v2 ? "stocks/tokens" : "tokens"}/${ca}/trades?limit=60&offset=0`, { signal: AbortSignal.timeout(15000) }).then((r) => r.json());
+  const j = await fetch(`https://gang.fun/api/${v2 === "v3" ? "v3/tokens" : v2 ? "stocks/tokens" : "tokens"}/${ca}/trades?limit=60&offset=0`, { signal: AbortSignal.timeout(15000) }).then((r) => r.json());
   return (j.items ?? []).map((t) => ({
     ts: t.ts, side: t.side, trader: t.trader, handle: t.traderHandle || null, tx: t.tx,
     // 买入实际付出 = 金额 + 平台费(接口金额不含费;卖出金额就是到手)
@@ -69,7 +69,7 @@ export async function recentTrades(ca, platform) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < 8000) return hit.data;
   let items = [], source = null;
-  if (platform === "gangv1" || platform === "gangv2") { items = await gangTrades(key, platform === "gangv2"); source = "gang.fun"; }
+  if (platform === "gangv1" || platform === "gangv2" || platform === "gangv3") { items = await gangTrades(key, platform === "gangv3" ? "v3" : platform === "gangv2"); source = "gang.fun"; }
   else if (platform === "four") { items = await fourTrades(key); source = "链上"; }
   const data = { source, items };
   cache.set(key, { at: Date.now(), data });

@@ -1,6 +1,8 @@
 // 识别一个 CA:哪个平台、内盘还是外盘、两个账号各持有多少、现在值多少、买 1% 要多少。只读,不发交易。
 import { ethers } from "ethers";
 import { addresses } from "./session.mjs";
+import { portalState, gateOf, holdsNft, nftName } from "./flapnft.mjs";
+import { bnbUsd } from "./prices.mjs";
 
 const net = ethers.Network.from(56);
 export const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
@@ -125,6 +127,12 @@ export async function dexUsd(addr) {
   return v;
 }
 
+// Gang 分红:taxed=true 的税币,1% 买卖税的一半按持仓分给持有 ≥1 万枚的地址(用底池币发,经分红金库);taxed=false 毕业后 0 税、不分红
+export function divOf(d) {
+  if (!d) return null;
+  return { sym: d.quoteSymbol ?? null, vault: d.vault ?? null, totalUsd: Number(d.totalUsd) || 0, d7Usd: Number(d.d7Usd) || 0, per10kUsd: Number(d.per10kUsd) || 0, apr: Number(d.apr) || 0 };
+}
+
 async function detectGang(ca, W) {
   const r = await fetch(`https://gang.fun/api/tokens/${ca.toLowerCase()}`, { signal: AbortSignal.timeout(10000) }).catch(() => null);
   if (!r || !r.ok) return null;
@@ -134,8 +142,8 @@ async function detectGang(ca, W) {
   const res = {
     platform: v2 ? "gangv2" : "gangv1", platformLabel: v2 ? `Gang V2 · 底池 ${d.quoteSymbol}` : "Gang 第一代 · 底池 BNB",
     stage: d.graduated ? "outer" : "inner", quote: v2 ? d.quoteSymbol : "BNB", progress: d.progressPct, pair: d.pair,
-    holders: d.holders, lastTradeAt: d.lastTradeAt, taxed: d.taxed, onePctTokens: 10_000_000, holdings: {},
-    supply: 1e9, priceQuote: Number(v2 ? d.priceQuote : d.priceBnb), quoteUsd: Number(d.quoteUsd) || null, mcUsd: Number(d.fdvUsd) || null,
+    holders: d.holders, lastTradeAt: d.lastTradeAt, taxed: d.taxed, dividend: d.taxed === undefined ? null : !!d.taxed, div: divOf(d.dividends), onePctTokens: 10_000_000, holdings: {},
+    supply: 1e9, priceQuote: Number(v2 ? d.priceQuote : d.priceBnb) * (v2 && String(d.quoteAddress || "").toLowerCase() === "0x21caef8a43163eea865baee23b9c2e327696a3bf" ? 1e12 : 1),   // gang.fun 按 18 位给 XAUt(6 位)的价格,小 10^12 倍 quoteUsd: Number(d.quoteUsd) || null, mcUsd: Number(d.fdvUsd) || null,
     volume24hUsd: Number(d.volume24hUsd) || null, trades24h: d.trades24h ?? null, creatorHandle: d.creatorHandle ?? null,
     quoteAddress: v2 ? d.quoteAddress?.toLowerCase() ?? null : null,
   };
@@ -165,6 +173,75 @@ async function detectGang(ca, W) {
   return res;
 }
 
+// Gang V3(合并发射台,2026-10-27 主网):直接读链上 curves();创建者 .ai 名字等从 gang.fun /v3/tokens 接口补(拿不到不影响)
+const GANG_V3_PAD = "0x15CFD2dc8278Fb87a1783ef42111618E20874365";
+const V3_VIRTUAL_TOKEN = 1_066_666_666_666_666_666_666_666_667n;
+const v3I = new ethers.Interface([
+  "function curves(address token) view returns (address creator, address quote, uint128 realQuote, uint128 sold, uint128 gradAmt, uint128 virtualQuote, bool graduated, uint16 buyTaxBps, uint16 sellTaxBps, uint16 dividendBps, address pair, address refPair)",
+]);
+async function detectGangV3(ca, W) {
+  const r = await provider.call({ to: GANG_V3_PAD, data: v3I.encodeFunctionData("curves", [ca]) }).catch(() => null);
+  if (!r || r === "0x") return null;
+  const c = v3I.decodeFunctionResult("curves", r);
+  if (c.creator === ethers.ZeroAddress) return null;
+  const quote = c.quote.toLowerCase(), wb = quote === "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
+  const [qInfo, api] = await Promise.all([
+    wb ? null : erc20Info(c.quote).catch(() => null),
+    fetch(`https://gang.fun/api/v3/tokens/${ca.toLowerCase()}`, { signal: AbortSignal.timeout(6000) }).then((x) => (x.ok ? x.json() : null)).catch(() => null),
+  ]);
+  const qSym = wb ? "BNB" : qInfo?.symbol ?? "?";
+  const price = Number(ethers.formatEther(((c.virtualQuote + c.realQuote) * 10n ** 18n) / (V3_VIRTUAL_TOKEN - c.sold)));
+  const res = {
+    platform: "gangv3", platformLabel: `Gang V3 · 底池 ${qSym}`, stage: c.graduated ? "outer" : "inner", quote: qSym, quoteAddress: wb ? null : quote,
+    progress: c.graduated ? 100 : c.gradAmt > 0n ? Number((c.realQuote * 10000n) / c.gradAmt) / 100 : 0, pair: c.pair === ethers.ZeroAddress ? null : c.pair,
+    supply: 1e9, onePctTokens: 10_000_000, priceQuote: price, holdings: {},
+    taxed: Number(c.buyTaxBps) > 0 || Number(c.sellTaxBps) > 0, postTaxBuy: Number(c.buyTaxBps) / 100, postTaxSell: Number(c.sellTaxBps) / 100,
+    dividend: Number(c.dividendBps) > 0, dividendPct: Number(c.dividendBps) / 100,
+    creatorHandle: api?.creatorHandle ?? null, holders: api?.holders ?? null, lastTradeAt: api?.lastActivityAt ?? null, trades24h: api?.trades24h ?? null,
+  };
+  res.quoteUsd = wb ? await bnbUsd().catch(() => null) : await dexUsd(quote);
+  if (res.quoteUsd) res.mcUsd = price * 1e9 * res.quoteUsd;
+  if (!c.graduated) { res.cost1pct = price * 1e7 * 1.01; res.costHalfPct = res.cost1pct / 2; }
+  for (const [k, w] of Object.entries(W)) {
+    const bal = await one(ca, "balanceOf", [w]).catch(() => 0n);
+    const h = { tokens: fmt(bal) };
+    if (bal > 0n && !c.graduated) h.value = price * fmt(bal);
+    res.holdings[k] = h;
+  }
+  return res;
+}
+
+// Flap 普通 Portal 上的盘(重点是 Agent ID 门槛盘):内盘按 Portal 直接买卖,门槛盘要钱包持有指定 NFT
+async function detectFlapPortal(ca, W) {
+  const st = await portalState(ca).catch(() => null);
+  if (!st) return null;
+  const inner = st.status === 1;
+  const nft = inner ? await gateOf(ca) : null;
+  const qInfo = st.quote ? await erc20Info(st.quote).catch(() => null) : null;
+  const res = {
+    platform: "flapportal", platformLabel: nft ? `Flap 门槛盘 · 需持有 ${nftName(nft) ?? "指定 NFT"}` : "Flap 内盘(普通)", stage: inner ? "inner" : "outer",
+    quote: st.quote ? qInfo?.symbol ?? "?" : "BNB", quoteAddress: st.quote ? st.quote.toLowerCase() : null, nativeSwap: st.nativeSwap,
+    progress: inner ? st.progress : undefined, priceQuote: st.price, supply: 1e9, onePctTokens: 10_000_000, holdings: {},
+    nftGate: nft ? { nft, name: nftName(nft), wallets: {} } : null,
+  };
+  res.quoteUsd = st.quote ? await dexUsd(res.quoteAddress) : await bnbUsd().catch(() => null);
+  if (res.quoteUsd && st.price) res.mcUsd = st.price * 1e9 * res.quoteUsd;
+  // 买 1% 的大概花费(底池币单位 + 折成 BNB):现价 × 1000 万,曲线越买越贵,实际略高
+  if (inner && st.price) {
+    res.cost1pct = st.price * 1e7 * 1.02; res.costHalfPct = res.cost1pct / 2;
+    const px = st.quote ? await bnbUsd().catch(() => null) : null;
+    res.cost1pctBnb = !st.quote ? res.cost1pct : res.quoteUsd && px ? (res.cost1pct * res.quoteUsd) / px : null;
+  }
+  for (const [k, w] of Object.entries(W)) {
+    const bal = await one(ca, "balanceOf", [w]).catch(() => 0n);
+    const h = { tokens: fmt(bal) };
+    if (bal > 0n && inner) h.value = st.price * fmt(bal);
+    res.holdings[k] = h;
+    if (nft) res.nftGate.wallets[k] = await holdsNft(nft, w);
+  }
+  return res;
+}
+
 async function detectPlain(ca, W, info) {
   const res = { platform: "dex", platformLabel: "其他 / 外盘代币", stage: "outer", quote: "BNB", holdings: {} };
   for (const [k, w] of Object.entries(W)) res.holdings[k] = { tokens: fmt(await one(ca, "balanceOf", [w]).catch(() => 0n), info.decimals) };
@@ -176,7 +253,7 @@ export async function detect(caRaw, { hint } = {}) {
   const ca = ethers.getAddress(caRaw);
   const [code, W] = await Promise.all([provider.getCode(ca), addresses()]);   // W:只算本机已登录的账号
   if (code !== "0x" && hint) {
-    const one = hint === "four" ? detectFour : String(hint).startsWith("gang") ? detectGang : hint === "idagent" ? detectIdAgent : null;
+    const one = hint === "four" ? detectFour : hint === "gangv3" ? detectGangV3 : String(hint).startsWith("gang") ? detectGang : hint === "idagent" ? detectIdAgent : hint === "flapportal" ? detectFlapPortal : null;
     if (one) {
       const [info, hit] = await Promise.all([erc20Info(ca), one(ca, W).catch(() => null)]);
       if (hit) return { ca, symbol: info.symbol, name: info.name, wallets: W, ...hit };
@@ -188,9 +265,10 @@ export async function detect(caRaw, { hint } = {}) {
     if (idAgent) return { ca, symbol: "(未部署)", name: "", wallets: W, ...idAgent };
     throw new Error("这个地址上没有合约,也不是已知内盘的预测地址");
   }
-  const [info, four, idAgent, gang] = await Promise.all([
+  const [info, four, idAgent, gang, gang3, flapP] = await Promise.all([
     erc20Info(ca), detectFour(ca, W).catch(() => null), detectIdAgent(ca, W).catch(() => null), detectGang(ca, W).catch(() => null),
+    detectGangV3(ca, W).catch(() => null), detectFlapPortal(ca, W).catch(() => null),
   ]);
-  const hit = four || gang || idAgent || (await detectPlain(ca, W, info));
+  const hit = four || gang || gang3 || idAgent || flapP || (await detectPlain(ca, W, info));
   return { ca, symbol: info.symbol, name: info.name, wallets: W, ...hit };
 }

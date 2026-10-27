@@ -7,6 +7,7 @@
 import { ethers } from "ethers";
 import { provider } from "./detect.mjs";
 import { bawJson } from "./session.mjs";
+import { FLAP_PORTAL } from "./flapnft.mjs";
 
 const FOUR_TOOLS = "0x97DA82f56FEF1A0B974587a48135fa9dA2A4E905";
 const GANG_V1 = "0x315Ba2e8952D06094CC636b2B84229FA32fb23A7";
@@ -60,7 +61,23 @@ export async function quote(d, { action, acct, arg, slip }) {
     if (!q) return { note: "报价失败" };
     return out(fmt(q.bnbOut), "BNB", fmt(q.fee), "BNB");
   }
-  if (inner && d.platform === "gangv2") {
+  // Flap Portal 盘(门槛盘):Portal 自己的 quoteExactInput(按这个钱包报价,门槛和 2% 额度都算进去)
+  if (inner && d.platform === "flapportal") {
+    const PI = new ethers.Interface(["function quoteExactInput((address inputToken,address outputToken,uint256 inputAmount)) returns (uint256)"]);
+    const q = (a) => provider.call({ from: W, to: FLAP_PORTAL, data: PI.encodeFunctionData("quoteExactInput", [a]) }).then((r) => PI.decodeFunctionResult("quoteExactInput", r)[0]).catch(() => null);
+    if (d.nftGate && d.nftGate.wallets?.[acct] === 0) return { note: "这个号没有门槛要求的 NFT,买卖会被跳过" };
+    if (action === "buy") {
+      const bnb = pctArg(arg) !== null ? (d.cost1pctBnb ?? 0) * pctArg(arg) * 1.05 : Number(arg);
+      if (!(bnb > 0)) return { note: "报不出价" };
+      const got = await q([ethers.ZeroAddress, d.ca, ethers.parseEther(bnb.toFixed(12))]);
+      if (got === null || got === 0n) return { note: "报价失败(可能 2% 额度用完)" };
+      return out(fmt(got), sym, null, null, `花费约 ${nf(bnb)} BNB(超过 2% 额度的部分退回)`);
+    }
+    const got = await q([d.ca, ethers.ZeroAddress, pctOf(bal, arg)]);
+    if (got === null) return { note: "报价失败" };
+    return out(fmt(got), "BNB", null, null);
+  }
+  if (inner && (d.platform === "gangv2" || d.platform === "gangv3")) {
     const p = d.priceQuote;
     if (!(p > 0)) return { note: "读不到现价" };
     if (action === "buy") {

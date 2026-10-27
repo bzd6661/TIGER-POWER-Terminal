@@ -6,6 +6,7 @@
 <title>TIGER POWER · 钱包追踪</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <script src="/i18n.js"></script>
+<script src="/update.js" defer></script>
 <style>
   :root {
     --bg:#0a0c0f; --s1:#101318; --s2:#151920; --s3:#1b2029; --line:#1e232c; --line2:#2a313d;
@@ -87,6 +88,31 @@
   .toasts { position:fixed; right:14px; bottom:14px; display:flex; flex-direction:column; gap:8px; z-index:99; }
   .toast { background:var(--s3); border:1px solid var(--line2); border-radius:9px; padding:9px 13px; max-width:380px; font-size:12px; } .toast.err { border-color:var(--down); } .toast.ok { border-color:var(--up); }
   .toast.click { cursor:pointer; } .toast.click:hover { border-color:var(--acc); } .toast.click::after { content:"  点击打开 →"; color:var(--acc); font-weight:600; }
+  .vtabs { display:flex; gap:2px; background:var(--s2); border-radius:8px; padding:2px; }
+  .vtabs button { background:none; border:0; color:var(--mute); border-radius:6px; padding:3px 10px; font-size:13px; } .vtabs button.on { background:var(--s3); color:var(--text); }
+  .pill { font-size:10px; padding:0 5px; border-radius:8px; background:var(--up-bg); color:var(--up); } .pill.real { background:var(--down-bg); color:var(--down); }
+  .kill { background:var(--down-bg); color:var(--down); border:1px solid var(--down); border-radius:7px; padding:3px 10px; font-size:12px; font-weight:700; } .kill.on { background:var(--up-bg); color:var(--up); border-color:var(--up); }
+  .titem .r1 .cpy { margin-left:auto; background:none; border:1px solid var(--line2); border-radius:5px; color:var(--mute); font-size:11px; padding:0 6px; } .titem .r1 .cpy:hover { color:var(--acc); border-color:var(--acc); }
+  .titem .r1 .cpy + .x { margin-left:2px; }
+  .cbar { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .seg { display:flex; gap:2px; } .seg button { background:none; border:1px solid var(--line2); color:var(--mute); padding:3px 10px; font-size:12px; border-radius:6px; } .seg button.on { color:var(--text); background:var(--s3); }
+  .ctab td { white-space:normal; vertical-align:top; } .ctab .ops { white-space:nowrap; text-align:right; }
+  .ctab .ops button, .ltab button { background:var(--s2); border:1px solid var(--line2); border-radius:6px; padding:2px 9px; font-size:12px; margin-left:4px; } .ctab .ops button.go { border-color:var(--up); color:var(--up); }
+  .tag.realtag { background:var(--down-bg); color:var(--down); }
+  .lhead { padding:12px 14px 6px; font-weight:600; font-size:13px; }
+  .ltab td { font-size:12px; padding:5px 10px; vertical-align:top; } .ltab .lr { white-space:normal; }
+  .lk { font-size:11px; padding:0 6px; border-radius:4px; background:var(--s3); } .lk.up { color:var(--up); background:var(--up-bg); } .lk.down { color:var(--down); background:var(--down-bg); }
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:90; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .mbox { background:var(--s1); border:1px solid var(--line2); border-radius:12px; width:640px; max-width:100%; max-height:92vh; display:flex; flex-direction:column; }
+  .mhead, .mfoot { display:flex; align-items:center; gap:10px; padding:12px 16px; } .mhead { border-bottom:1px solid var(--line); } .mfoot { border-top:1px solid var(--line); justify-content:flex-end; }
+  .mhead .x { margin-left:auto; background:none; border:0; color:var(--mute); font-size:15px; }
+  .mbody { overflow:auto; padding:12px 16px; display:flex; flex-direction:column; gap:10px; }
+  .fl { display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--mute); flex:1; min-width:150px; }
+  .fl input, .fl select { background:var(--s2); border:1px solid var(--line2); border-radius:7px; padding:6px 9px; outline:0; color:var(--text); }
+  .fl input:disabled { opacity:.6; }
+  .frow { display:flex; gap:10px; flex-wrap:wrap; } .ckrow { align-items:center; font-size:12px; }
+  .ck { display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer; }
+  .grp { border:1px solid var(--line); border-radius:9px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; } .gt { font-weight:700; font-size:12px; color:var(--acc); }
   @media (max-width:820px) { body { overflow:auto; } .main { flex-direction:column; } .side { flex:none; border-right:0; } }
   /* 顶栏放不下时:先藏 Logo 小字和推特账号文字,间距收紧,搜索框可以缩窄 */
   @media (max-width:1600px) { .brand .tmsub { display:none; } .xlink span { display:none; } }
@@ -116,13 +142,49 @@
   </aside>
   <section class="feedwrap">
     <div class="fhead">
+      <div class="vtabs"><button id="tabFeed" class="on">追踪动态</button><button id="tabCopy">跟单</button></div>
       <h2 id="fTitle">全部动态</h2>
       <span class="note" id="fNote"></span>
+      <button class="kill" id="killBtn" hidden title="所有跟单任务立刻停止下单">⏸ 全部暂停</button>
       <label class="sw" style="margin-left:auto"><input type="checkbox" id="sndOn"> 提示音</label>
     </div>
     <div class="feed" id="feed"></div>
+    <div class="feed copyview" id="copyView" hidden></div>
   </section>
 </div>
+<div class="modal" id="cpDlg" hidden><div class="mbox">
+  <div class="mhead"><b id="cpTitle">新建跟单</b><button class="x" id="cpClose">✕</button></div>
+  <div class="mbody">
+    <label class="fl">跟谁<input id="cpTarget" placeholder="地址 0x…(还没关注会自动加进追踪)" spellcheck="false"></label>
+    <label class="fl">任务名<input id="cpName" placeholder="可选,默认用对方的名字" maxlength="40"></label>
+    <div class="grp"><div class="gt">金额</div>
+      <div class="frow"><label class="fl">方式<select id="cpMode"><option value="fixed">每次固定 BNB</option><option value="ratio">按对方买入的比例</option></select></label>
+        <label class="fl" id="cpAmtL">每次买入(BNB / 每个钱包)<input id="cpAmt" type="number" step="0.001" min="0"></label>
+        <label class="fl" id="cpRatioL" hidden>跟对方的 %<input id="cpRatio" type="number" step="1" min="0"></label></div>
+      <div class="frow"><label class="fl">最多跟几次(0 = 不限)<input id="cpMaxCopies" type="number" step="1" min="0"></label>
+        <label class="fl">单笔上限 BNB<input id="cpMaxTrade" type="number" step="0.01" min="0" max="0.5"></label>
+        <label class="fl">每个币最多 BNB<input id="cpMaxToken" type="number" step="0.01" min="0"></label></div>
+      <div class="frow"><label class="fl">每天最多 BNB(所有钱包合计)<input id="cpDaily" type="number" step="0.01" min="0"></label>
+        <label class="fl">最多同时持有几个币<input id="cpMaxOpen" type="number" step="1" min="1"></label></div>
+    </div>
+    <div class="grp"><div class="gt">条件</div>
+      <label class="ck"><input type="checkbox" id="cpOnlyFirst"> 只跟建仓(对方第一次买这个币;同一个币只跟一次)</label>
+      <div class="frow"><label class="fl">对方买入下限 BNB(0 = 不限)<input id="cpMinT" type="number" step="0.01" min="0"></label>
+        <label class="fl">对方买入上限 BNB(0 = 不限)<input id="cpMaxT" type="number" step="0.01" min="0"></label>
+        <label class="fl">市值上限 $(0 = 不限)<input id="cpMaxMc" type="number" step="1000" min="0"></label></div>
+      <div class="frow"><label class="fl">最多晚几秒(超过就不跟)<input id="cpDelay" type="number" step="1" min="1"></label>
+        <label class="fl">滑点 %<input id="cpSlip" type="number" step="1" min="1" max="50"></label></div>
+      <div class="frow ckrow"><span class="faint">平台</span><label class="ck"><input type="checkbox" data-pf="four"> four</label><label class="ck"><input type="checkbox" data-pf="gang"> Gang</label><label class="ck"><input type="checkbox" data-pf="flap"> Flap 内盘</label></div>
+      <div class="frow ckrow"><span class="faint">用哪个钱包</span><label class="ck"><input type="checkbox" data-w="1"> 账号 1</label><label class="ck"><input type="checkbox" data-w="2"> 账号 2</label></div>
+      <label class="ck"><input type="checkbox" id="cpFollowSell"> 跟卖:对方卖出时,按他卖出的比例卖我跟买的仓位(对方清仓我也清仓)</label>
+    </div>
+    <div class="grp"><div class="gt">运行方式</div>
+      <label class="ck"><input type="checkbox" id="cpDry"> 模拟(只记录会怎么下单,不花钱)—— 建议先模拟跑一段时间看记录</label>
+      <div class="faint" style="font-size:11px">新任务建好后是「暂停」状态,在列表里点「启动」才开始。单笔硬上限 0.5 BNB;已提交的订单不管最后成没成都按花了钱算。</div>
+    </div>
+  </div>
+  <div class="mfoot"><span class="down" id="cpErr"></span><button class="btn" id="cpSave">保存</button></div>
+</div></div>
 <div class="toasts" id="toasts"></div>
 
 <script>
@@ -191,14 +253,15 @@ function renderSide() {
   const last = {}; for (const e of items) if (!last[e.target]) last[e.target] = e.ts;
   $("tlist").innerHTML = list.length ? list.map((t) => `<div class="titem ${sel === t.address ? "on" : ""}" data-a="${t.address}">
       <div class="r1"><b title="${esc(t.handle ?? "")}">${esc(t.name || short(t.address))}</b><span class="tag">${esc(t.group)}</span>${!t.backfilledAt ? '<span class="tag" title="正在补最近 24 小时">回补中…</span>' : t.backfillPartial ? '<span class="tag" title="没配自己的节点,公共节点只查到最近约 1 小时">只补了 1 小时</span>' : ""}
-        <button class="x" data-del="${t.address}" title="取消关注">✕</button></div>
+        <button class="cpy" data-copyt="${t.address}" title="跟单这个地址">跟单</button><button class="x" data-del="${t.address}" title="取消关注">✕</button></div>
       <div class="r2"><span class="mono">${short(t.address)}</span>${last[t.address] ? `<span>最近 ${age(last[t.address])}</span>` : ""}</div>
       <div class="rm" data-rm="${t.address}" title="点击编辑备注">${esc(t.remark)}</div>
     </div>`).join("") : '<div class="empty">还没有关注的地址<br>在上面填地址或 .ai 名字</div>';
   $("tlist").querySelectorAll(".titem").forEach((el) => (el.onclick = (e) => {
-    if (e.target.closest("[data-del],[data-rm]")) return;
+    if (e.target.closest("[data-del],[data-rm],[data-copyt]")) return;
     sel = sel === el.dataset.a ? null : el.dataset.a; renderSide(); renderHead(); loadFeed();
   }));
+  $("tlist").querySelectorAll("[data-copyt]").forEach((b) => (b.onclick = () => openCopyDlg(b.dataset.copyt)));
   $("tlist").querySelectorAll("[data-del]").forEach((b) => (b.onclick = async () => {
     const t = L.targets.find((x) => x.address === b.dataset.del);
     if (!confirm(`取消关注 ${t?.name || b.dataset.del}?(已记下的历史动态保留)`)) return;
@@ -224,7 +287,7 @@ function row(e, isNew) {
     <td><span class="who" data-who="${e.target}">${esc(e.targetName || short(e.target))}</span></td>
     <td><span class="act ${esc(e.action)}">${esc(e.action)}</span>${e.pct ? ` <span class="faint">${e.pct.toFixed(0)}%</span>` : ""}</td>
     <td><span class="tok" data-ca="${e.ca}" title="在交易页打开">${esc(e.symbol)}</span> <span class="pf">${esc(plat)}</span>
-      <div class="cal"><span class="mono" title="${e.ca}">${short(e.ca)}</span><button class="cp" data-copy="${e.ca}" title="复制 CA">复制</button><a class="go" href="/?ca=${e.ca}" target="_blank" rel="noopener" title="在交易页打开这个币">去交易 →</a></div></td>
+      <div class="cal"><span class="mono" title="${e.ca}">${short(e.ca)}</span><button class="cp" data-copy="${e.ca}" title="复制 CA">复制</button><a class="cp" href="https://x.com/search?q=${e.ca}&f=live" target="_blank" rel="noopener" title="在 X 上搜这个 CA(看谁在喊)" style="text-decoration:none">𝕏</a><a class="go" href="/?ca=${e.ca}" target="_blank" rel="noopener" title="在交易页打开这个币">去交易 →</a></div></td>
     <td class="num ${e.side === "buy" ? "up" : "down"}">${num(e.quoteAmt)} <span class="faint">${esc(e.quote)}</span></td>
     <td class="num mute">${e.usd ? "$" + num(e.usd) : ""}</td>
     <td class="num faint">${num(e.tokens)} 个</td>
@@ -269,6 +332,7 @@ function startStream() {
   es.onerror = async () => { $("liveDot").className = "dot off"; if (es.readyState === 2 && (await refreshToken())) setTimeout(startStream, 1000); };
   es.onmessage = (m) => {
     let ev; try { ev = JSON.parse(m.data); } catch { return; }
+    if (ev.type === "copy-tasks" || ev.type === "copy-log") return window.copyOnEvent?.(ev);
     if (ev.type === "track-list") { clearTimeout(listT); listT = setTimeout(async () => { const wasRunning = L.status?.running; await loadList(); if (wasRunning && !L.status?.running) loadFeed(); }, 300); return; }
     if (ev.type !== "track") return;
     const t = L.targets.find((x) => x.address === ev.target);
@@ -282,6 +346,127 @@ function startStream() {
 setInterval(() => { if (!document.hidden && items.length) renderFeed(); }, 30_000);   // 刷新「几分前」
 loadList().then(() => loadFeed());
 startStream();
+// ---------- 跟单 ----------
+// 任务和记录都在本机(panel/copy-tasks.json / copy-log.jsonl);新任务一律「暂停 + 模拟」,真实下单前再确认一次
+let CP = { tasks: [], paused: false, log: [], defaults: {} }, view = store.get("trkView", "feed"), cpHist = false, cpEdit = null;
+const KIND = { order: ["下单", "up"], sim: ["模拟", ""], skip: ["跳过", "faint"], fail: ["失败", "down"], error: ["出错", "down"], stop: ["结束", "mute"] };
+async function loadCopy() {
+  try { CP = await post("/api/copy"); } catch (e) { toast("读跟单失败:" + e.message, "err"); }
+  renderCopyTab(); if (view === "copy") renderCopy();
+}
+function renderCopyTab() {
+  const run = CP.tasks.filter((t) => t.status === "running"), real = run.filter((t) => !t.params.dryRun).length;
+  $("tabCopy").innerHTML = `跟单${run.length ? ` <span class="pill ${real ? "real" : ""}">${run.length}${real ? " 真实" : ""}</span>` : ""}`;
+  $("killBtn").hidden = !CP.tasks.some((t) => t.status === "running") && !CP.paused;
+  $("killBtn").textContent = CP.paused ? "▶ 恢复跟单" : "⏸ 全部暂停";
+  $("killBtn").classList.toggle("on", CP.paused);
+}
+function setView(v) {
+  view = v; store.set("trkView", v);
+  $("tabFeed").classList.toggle("on", v === "feed"); $("tabCopy").classList.toggle("on", v === "copy");
+  $("feed").hidden = v !== "feed"; $("copyView").hidden = v !== "copy";
+  if (v === "copy") renderCopy();
+}
+function summary(p) {
+  const amt = p.mode === "ratio" ? `对方 ${p.ratioPct}%` : `${p.amountBnb} BNB`;
+  return `${amt} × ${p.wallets.map((w) => "账号" + w).join(" + ")} · 单笔≤${p.maxPerTrade} · 每天≤${p.dailyCap}${p.onlyFirst ? " · 只跟建仓" : ""}${p.followSell ? " · 跟卖" : ""}`;
+}
+function renderCopy() {
+  const list = CP.tasks.filter((t) => (cpHist ? t.status === "closed" : t.status !== "closed"));
+  const st = (t) => t.status === "closed" ? `<span class="faint" title="${esc(t.closeReason ?? "")}">已关闭</span>`
+    : t.status === "running" ? (CP.paused ? '<span class="down">被全部暂停</span>' : '<span class="up">运行中</span>') : '<span class="mute">已暂停</span>';
+  const ops = (t) => t.status === "closed" ? `<button data-cdel="${t.id}">删除</button>`
+    : `${t.status === "running" ? `<button data-cst="${t.id}:paused">暂停</button>` : `<button data-cst="${t.id}:running" class="go">启动</button>`}<button data-cedit="${t.id}">参数</button><button data-cst="${t.id}:closed">关闭</button>`;
+  const rows = list.map((t) => {
+    const p = t.params, n = p.dryRun ? t.stats.simCopies : t.stats.copies, open = Object.values(t.tokens ?? {}).filter((x) => x.open).length;
+    return `<tr><td><b>${esc(t.name)}</b> <span class="tag ${p.dryRun ? "" : "realtag"}">${p.dryRun ? "模拟" : "真实下单"}</span><div class="faint mono" style="font-size:11px">${short(t.target)}</div><div class="faint" style="font-size:11px">${esc(summary(p))}</div></td>
+      <td class="num">${n}${p.maxCopies ? " / " + p.maxCopies : ""} 次<div class="faint">${t.stats.buys} 买 · ${t.stats.sells} 卖${p.dryRun ? ` · 模拟 ${t.stats.sims}` : ""}</div></td>
+      <td class="num">${num(t.stats.buyBnb)} BNB<div class="faint">持有 ${open} 个币</div></td>
+      <td class="faint">${t.stats.lastAt ? age(Math.floor(t.stats.lastAt / 1000)) + "前" : "—"}</td>
+      <td>${st(t)}</td><td class="ops">${ops(t)}</td></tr>`;
+  }).join("");
+  const logs = CP.log.slice(0, 200).map((e) => {
+    const [k, cls] = KIND[e.kind] ?? [e.kind, ""];
+    return `<tr><td class="faint">${age(e.ts)}前</td><td>${esc(e.taskName)}</td><td><span class="lk ${cls}">${k}</span></td>
+      <td>${e.token ? `<span class="tok" data-ca="${e.token}">${esc(e.symbol ?? short(e.token))}</span>` : ""}${e.action ? ` <span class="faint">${esc(e.action)}</span>` : ""}</td>
+      <td class="lr">${esc(e.reason)}${e.results ? `<div class="faint">${Object.entries(e.results).map(([a, r]) => `账号${a} ${r.ok ? "✓" : "✗"} ${esc((r.last ?? []).join(" ").slice(0, 120))}`).join("<br>")}</div>` : ""}</td></tr>`;
+  }).join("");
+  $("copyView").innerHTML = `<div class="cbar"><button class="btn" id="cpNew">＋ 新建跟单</button>
+      <div class="seg"><button class="${cpHist ? "" : "on"}" data-hist="0">活跃</button><button class="${cpHist ? "on" : ""}" data-hist="1">历史</button></div>
+      <span class="faint" style="font-size:12px">对方在内盘(four / Gang / Flap)买卖时触发;靠追踪的实时动态,面板要开着才会跟</span></div>
+    ${list.length ? `<table class="ctab"><thead><tr><th>任务</th><th>已跟</th><th>总买入</th><th>最近</th><th>状态</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+      : `<div class="empty">${cpHist ? "没有已关闭的任务" : "还没有跟单任务:点「＋ 新建跟单」,或在左边关注列表里点地址旁的「跟单」"}</div>`}
+    <div class="lhead">跟单记录 <span class="faint">(每次决定都记:下单 / 模拟 / 跳过和原因)</span></div>
+    ${logs ? `<table class="ltab"><tbody>${logs}</tbody></table>` : '<div class="empty" style="padding:20px">还没有记录</div>'}`;
+  $("cpNew").onclick = () => openCopyDlg(sel);
+  $("copyView").querySelectorAll("[data-hist]").forEach((b) => (b.onclick = () => { cpHist = b.dataset.hist === "1"; renderCopy(); }));
+  $("copyView").querySelectorAll("[data-cedit]").forEach((b) => (b.onclick = () => openCopyDlg(null, CP.tasks.find((t) => t.id === b.dataset.cedit))));
+  $("copyView").querySelectorAll("[data-cdel]").forEach((b) => (b.onclick = async () => { if (confirm("删除这个已关闭的任务?(记录保留)")) { try { await post("/api/copy/tasks", { id: b.dataset.cdel, delete: true }); } catch (e) { toast(e.message, "err"); } } }));
+  $("copyView").querySelectorAll("[data-cst]").forEach((b) => (b.onclick = async () => {
+    const [id, status] = b.dataset.cst.split(":"), t = CP.tasks.find((x) => x.id === id), p = t.params;
+    if (status === "closed" && !confirm(`关闭任务「${t.name}」?关闭后不能再启动(已买的币不会自动卖)`)) return;
+    if (status === "running" && !p.dryRun && !confirm(`⚠️ 启动真实跟单「${t.name}」\n\n跟 ${t.target}\n钱包:${p.wallets.map((w) => "账号 " + w).join("、")}\n每次 ${p.mode === "ratio" ? "对方的 " + p.ratioPct + "%" : p.amountBnb + " BNB"}(每个钱包),单笔最多 ${p.maxPerTrade} BNB\n每个币最多 ${p.maxPerToken} BNB,每天最多 ${p.dailyCap} BNB\n最多跟 ${p.maxCopies || "不限"} 次${p.followSell ? "\n对方卖出时按比例跟卖" : ""}\n\n会真实花钱下单,确定启动?`)) return;
+    try { await post("/api/copy/tasks", { id, status }); } catch (e) { toast(e.message, "err"); }
+  }));
+  $("copyView").querySelectorAll("[data-ca]").forEach((x) => (x.onclick = () => window.open("/?ca=" + x.dataset.ca, "_blank")));
+}
+function openCopyDlg(target, task = null) {
+  cpEdit = task;
+  const p = task?.params ?? CP.defaults;
+  $("cpTitle").textContent = task ? `跟单参数 · ${task.name}` : "新建跟单";
+  $("cpTarget").value = task?.target ?? target ?? ""; $("cpTarget").disabled = !!task;
+  $("cpName").value = task?.name ?? (target ? L.targets.find((t) => t.address === target)?.name ?? "" : "");
+  const set = (id, v) => ($(id).value = v ?? "");
+  $("cpMode").value = p.mode; set("cpAmt", p.amountBnb); set("cpRatio", p.ratioPct); set("cpMaxCopies", p.maxCopies); set("cpMaxTrade", p.maxPerTrade);
+  set("cpMaxToken", p.maxPerToken); set("cpDaily", p.dailyCap); set("cpMaxOpen", p.maxOpen); set("cpMinT", p.minTargetBnb); set("cpMaxT", p.maxTargetBnb);
+  set("cpMaxMc", p.maxMcUsd); set("cpDelay", p.maxDelaySec); set("cpSlip", p.slippage);
+  $("cpOnlyFirst").checked = !!p.onlyFirst; $("cpFollowSell").checked = !!p.followSell; $("cpDry").checked = !!p.dryRun;
+  document.querySelectorAll("#cpDlg [data-pf]").forEach((c) => (c.checked = p.platforms.includes(c.dataset.pf)));
+  document.querySelectorAll("#cpDlg [data-w]").forEach((c) => (c.checked = p.wallets.includes(c.dataset.w)));
+  const mode = () => { $("cpAmtL").hidden = $("cpMode").value !== "fixed"; $("cpRatioL").hidden = $("cpMode").value !== "ratio"; };
+  $("cpMode").onchange = mode; mode();
+  $("cpErr").textContent = ""; $("cpDlg").hidden = false;
+}
+$("cpClose").onclick = () => ($("cpDlg").hidden = true);
+$("cpDlg").onclick = (e) => { if (e.target.id === "cpDlg") $("cpDlg").hidden = true; };
+$("cpSave").onclick = async () => {
+  const v = (id) => Number($(id).value);
+  const params = {
+    mode: $("cpMode").value, amountBnb: v("cpAmt"), ratioPct: v("cpRatio"), maxCopies: v("cpMaxCopies"), maxPerTrade: v("cpMaxTrade"), maxPerToken: v("cpMaxToken"),
+    dailyCap: v("cpDaily"), maxOpen: v("cpMaxOpen"), minTargetBnb: v("cpMinT"), maxTargetBnb: v("cpMaxT"), maxMcUsd: v("cpMaxMc"), maxDelaySec: v("cpDelay"), slippage: v("cpSlip"),
+    onlyFirst: $("cpOnlyFirst").checked, followSell: $("cpFollowSell").checked, dryRun: $("cpDry").checked,
+    platforms: [...document.querySelectorAll("#cpDlg [data-pf]:checked")].map((c) => c.dataset.pf),
+    wallets: [...document.querySelectorAll("#cpDlg [data-w]:checked")].map((c) => c.dataset.w),
+  };
+  if (!params.platforms.length) return ($("cpErr").textContent = "至少选一个平台");
+  if (!params.wallets.length) return ($("cpErr").textContent = "至少选一个钱包");
+  if (cpEdit?.status === "running" && cpEdit.params.dryRun && !params.dryRun && !confirm("这个任务正在运行,关掉模拟后马上会真实下单,确定?")) return;
+  $("cpSave").disabled = true;
+  try {
+    if (cpEdit) await post("/api/copy/tasks", { id: cpEdit.id, name: $("cpName").value.trim(), params });
+    else {
+      const target = $("cpTarget").value.trim();
+      if (!/^0x[0-9a-fA-F]{40}$/.test(target)) throw new Error("地址格式不对");
+      await post("/api/copy/tasks", { target, name: $("cpName").value.trim(), params });
+      toast("已建好跟单任务(暂停中),在列表里点「启动」", "ok");
+    }
+    $("cpDlg").hidden = true; setView("copy");
+  } catch (e) { $("cpErr").textContent = e.message; }
+  $("cpSave").disabled = false;
+};
+$("tabFeed").onclick = () => setView("feed");
+$("tabCopy").onclick = () => setView("copy");
+$("killBtn").onclick = async () => {
+  if (!CP.paused && !confirm("暂停所有跟单任务?(已经在跑的那一单不受影响)")) return;
+  try { CP = { ...CP, ...(await post("/api/copy/pause-all", { paused: !CP.paused })) }; renderCopyTab(); if (view === "copy") renderCopy(); } catch (e) { toast(e.message, "err"); }
+};
+let cpT = null;
+window.copyOnEvent = (ev) => {
+  if (ev.type === "copy-log" && ["order", "fail", "error", "stop"].includes(ev.kind)) toast(`跟单「${ev.taskName}」${KIND[ev.kind]?.[0] ?? ""}:${ev.symbol ?? ""} ${ev.reason}`, ev.kind === "order" ? "ok" : "err", ev.token);
+  clearTimeout(cpT); cpT = setTimeout(loadCopy, 300);
+};
+setView(view); loadCopy();
+setInterval(() => { if (!document.hidden && view === "copy") renderCopy(); }, 30_000);
 </script>
 <script>
 document.getElementById("setBtn").onclick = (e) => { e.stopPropagation(); const m = document.getElementById("setMenu"); m.hidden = !m.hidden; };

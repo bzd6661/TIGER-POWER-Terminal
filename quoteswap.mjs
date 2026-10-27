@@ -19,6 +19,23 @@ const errText = (r) => JSON.stringify(r?.error ?? r ?? "");
 const quoteArgs = (qty, from, to, slip) => ["market-order", "quote", "--fromTokenQty", String(qty), "--fromToken", from, "--toToken", to, "--binanceChainId", "56", "--slippage", String(slip)];
 const swapArgs = (qty, from, to, slip) => ["market-order", "swap", "--fromTokenQty", String(qty), "--fromToken", from, "--toToken", to, "--binanceChainId", "56", "--slippage", String(slip)];
 
+// 底池币的小数位:大多是 18 位,XAUt 是 6 位。链上读一次后缓存;读不到按 18。
+//   注意 gang CLI 的金额参数一律按 18 位解析(传的是原始单位 / 1e18),只有换算成真实数量、去兑换时才用这个
+const KNOWN_DEC = { "0x21caef8a43163eea865baee23b9c2e327696a3bf": 6 };   // XAUt
+const decCache = new Map();
+export async function quoteDecimals(token) {
+  const k = String(token).toLowerCase();
+  if (KNOWN_DEC[k] !== undefined) return KNOWN_DEC[k];
+  if (decCache.has(k)) return decCache.get(k);
+  let d = 18;
+  try {
+    const r = await fetch(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: k, data: "0x313ce567" }, "latest"] }), signal: AbortSignal.timeout(8000) }).then((x) => x.json());
+    if (r?.result && r.result !== "0x") d = Number(BigInt(r.result));
+    decCache.set(k, d);
+  } catch { /* 网络失败不缓存,下次再读 */ }
+  return d;
+}
+
 // "direct" 或 "usdt"
 export async function routeOf(baw, token, slip = 3) {
   const k = String(token).toLowerCase(), all = load();

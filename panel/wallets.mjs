@@ -6,6 +6,7 @@ import { detect, provider, retry } from "./detect.mjs";
 import { bawJson as baw, sessions } from "./session.mjs";
 import { bnbUsd } from "./prices.mjs";
 import { quoteUsdOf } from "./history.mjs";
+import { loadBnbPx, saveBnbPx } from "./cache.mjs";
 const erc20 = new ethers.Interface(["function balanceOf(address) view returns (uint256)"]);
 // 查不到就返回 null(不是 0):别因为节点偶尔拒绝,就把持仓从列表里漏掉
 const balanceOf = (token, who) => retry(() => provider.call({ to: token, data: erc20.encodeFunctionData("balanceOf", [who]) })).then(BigInt).catch(() => null);
@@ -162,9 +163,11 @@ async function bnbUsdAt(ms) {
   if (!isFinite(ms)) return null;
   const m = Math.floor(ms / 60_000) * 60_000;
   if (bnbAt.has(m)) return bnbAt.get(m);
+  const cached = await loadBnbPx(m);
+  if (cached) { bnbAt.set(m, cached); return cached; }
   const v = await fetch(`https://api.binance.com/api/v3/klines?symbol=BNBUSDT&interval=1m&startTime=${m}&limit=1`, { signal: AbortSignal.timeout(8000) })
     .then((r) => r.json()).then((j) => Number(j?.[0]?.[4]) || null).catch(() => null);
-  if (v) bnbAt.set(m, v);
+  if (v) { bnbAt.set(m, v); if (Date.now() - m > 3_600_000) saveBnbPx(m, v); }   // 最近 1 小时的价格可能还会变,不存
   return v;
 }
 // 美元成本 / 现值 / 盈亏:BNB 买的按每笔买入那一分钟的 BNB 价;用 GANG 等底池币买的没有历史价,按现价(标约)

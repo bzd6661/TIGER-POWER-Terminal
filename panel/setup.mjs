@@ -67,6 +67,15 @@ else {
 }
 if (!existsSync(here("baw2/node_modules/@binance/agentic-wallet/dist/index.js"))) console.log("    (想同时用第二个币安账号:在 baw2 文件夹里运行 npm install,见 README)");
 
+// 新版本:GitHub 上有重大更新就提醒一句(查不到不影响启动;页面上也会提示)
+{
+  const { checkUpdate, updateStatus } = await import("./update.mjs");
+  await Promise.race([checkUpdate(), sleep(6000)]);
+  const u = updateStatus();
+  if (u.major) warn(`有重大更新 v${u.remote.version}:${u.remote.title}\n    ${u.git ? "在这个文件夹运行 git pull 再重新双击 start.cmd" : "去 " + u.page + " 下载最新压缩包,解压覆盖到这个文件夹"}`);
+  else if (u.remote) ok(`已是最新版本 v${u.local.version}`);
+}
+
 // 4. 启动后台守护进程(没有窗口;代码改了自动重启,崩了自动拉起)
 console.log("  … 启动面板");
 const env = { ...process.env, PANEL_PORT: String(PORT) };

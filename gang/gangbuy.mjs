@@ -7,7 +7,7 @@
 import { takeAcct, bawSpawn, runBoth, BAW2_ENTRY, BAW2_DIR } from "../accounts.mjs";
 import { makeGang } from "./gangcore.mjs";
 import { checkLiquid } from "../liq.mjs";
-import { perBnb, bnbToToken } from "../quoteswap.mjs";
+import { perBnb, bnbToToken, quoteDecimals } from "../quoteswap.mjs";
 import { ethers } from "ethers";
 
 const BNB = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
@@ -43,7 +43,10 @@ function baw(a) {
   });
 }
 const balanceOf = async (token, who) => BigInt(await provider.call({ to: token, data: erc20.encodeFunctionData("balanceOf", [who]) }));
-const fmt = (wei, d = 6) => Number(ethers.formatEther(wei)).toFixed(d);
+// 底池币金额:gang CLI 按 18 位给 / 收(原始单位 / 1e18),真实数量要按底池币自己的小数位换算(XAUt 是 6 位)
+let qDec = 18;
+const qNum = (raw) => Number(ethers.formatUnits(raw, qDec));
+const fmt = (raw, d = 6) => qNum(raw).toFixed(d);
 
 // 执行一个 gang 生成的 preview:检查 → baw execute → 等上链
 async function run(label, pv) {
@@ -63,7 +66,27 @@ async function run(label, pv) {
 
 const info = await gang(["token", "--token", ca]);
 if (!info.success) die(`查不到这个币:${JSON.stringify(info.error ?? info)}`);
-if (info.graduated) die(`已毕业,去 PancakeSwap 买(pair ${info.pair})`);
+// 刚毕业(面板那边还当成内盘)时不报错:按同样的数量折成 BNB,转到外盘买(dexbuy.mjs,聚合器没路径会走 PancakeSwap 直连)
+if (info.graduated) {
+  const want = wantTokens ? Number(wantTokens) : 1e7;   // 没指定就按 1%(1000 万个)
+  let perBnbTok = null;
+  try {
+    const { findPath, amountOut } = await import("../pancake.mjs");
+    const path = await findPath(ca, info.quote);
+    if (path) perBnbTok = Number(ethers.formatEther(await amountOut(ethers.parseEther("0.01"), path))) / 0.01;
+  } catch {}
+  if (!perBnbTok) { const q = await baw(["market-order", "quote", "--fromTokenQty", "0.01", "--fromToken", BNB, "--toToken", ca, "--binanceChainId", "56", "--slippage", "10"]).catch(() => null); if (q?.success) perBnbTok = Number(q.data.toCoinAmount) / 0.01; }
+  if (!(perBnbTok > 0)) die(`已毕业(pair ${info.pair}),但外盘报不出价,先不买`);
+  // 0.01 BNB 的报价没算上大单的价格冲击:多带 3%,实际按 BNB 数量成交
+  const bnb = Math.ceil((want / perBnbTok) * 1.03 * 1e6) / 1e6;
+  if (maxBnb !== null && bnb > maxBnb) die(`已毕业,外盘买 ${want} 个约需 ${bnb} BNB,超过上限 ${maxBnb} BNB,不买(钱没动)`);
+  log(`这个币已经毕业了,改走外盘:买约 ${want} 个 ≈ ${bnb} BNB(dexbuy.mjs)`);
+  const { spawn } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const ps = spawn(process.execPath, [fileURLToPath(new URL("../dexbuy.mjs", import.meta.url)), ca, String(bnb), "--mid", info.quote, "--acct", ACCT, ...(DRY ? ["--dry"] : [])], { stdio: "inherit" });
+  ps.on("close", (code) => process.exit(code ?? 1));
+  await new Promise(() => {});
+}
 // V2 和以后的新版本(比如 V3,要新版 gang CLI 才认得)都按 CLI 给的报价 / calldata 走;第一代 soft 池用 gangv1buy.mjs
 if (info.kind === "soft") die(`这是 ${info.kind} 池,用 gangv1buy.mjs`);
 const W = info.buyer ?? (await baw(["wallet", "address"]))?.data?.addresses?.find((x) => x.binanceChainId === "56")?.address;
@@ -75,6 +98,7 @@ if (target > room) { log(`要买 ${ethers.formatEther(target)} 个,超过剩余�
 const hasId = BigInt(await provider.call({ to: "0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F", data: erc20.encodeFunctionData("balanceOf", [W]) }));
 if (hasId === 0n) die(`钱包 ${W} 没有 Agent ID,Gang 内盘买不了(先在 Binance App 领 .ai ID)`);
 const quote = ethers.getAddress(info.quote);
+qDec = await quoteDecimals(quote);
 log(`${info.symbol}(${info.name}) ${ca}  目标 ${ethers.formatEther(target)} 个  底池 ${quote}`);
 
 // 用足够大的投入询价:超出上限的部分会显示为退款,spent 就是买到目标数量真正需要的底池币
@@ -93,7 +117,7 @@ let need;
 const input = (need * BigInt(Math.round((100 + buffer) * 100))) / 10000n;
 // --max-bnb:这一笔折合 BNB 超过上限就不买(V3 自动买入用:新发射台价格未知,先封顶)
 if (maxBnb !== null) {
-  let bnbCost = Number(ethers.formatEther(need));
+  let bnbCost = qNum(need);
   if (quote.toLowerCase() !== "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c") {
     const pb = await perBnb(baw, quote, swapSlip).catch(() => null);
     if (!(pb?.perBnb > 0)) die(`底池币 ${quote} 拿不到 BNB 报价,算不出花费,按 --max-bnb 的要求不买`);
@@ -108,7 +132,7 @@ if (have < input) {
   const deficit = input - have;
   if (quote.toLowerCase() === "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c") {
     // 底池是 WBNB:直接 WBNB.deposit() 1:1 包装,不走兑换
-    log(`底池是 WBNB,包装 ${ethers.formatEther(deficit)} BNB → WBNB`);
+    log(`底池是 WBNB,包装 ${fmt(deficit)} BNB → WBNB`);
     const p = await baw(["contract-call", "preview", "--binanceChainId", "56", "--from", W, "--to", quote, "--value", deficit.toString(), "--inputData", "0xd0e30db0"]);
     await run("包装 WBNB", p.success ? { success: true, requestId: p.data.requestId, risks: p.data.risks?.riskDetails || [], requireConfirmation: p.data.requireConfirmation } : p);
     have = await balanceOf(quote, W);
@@ -121,7 +145,7 @@ if (have < input) {
   try { pb = await perBnb(baw, quote, swapSlip); } catch (e) { die(e.message); }
   // 走 USDT 中转是两次兑换,滑点按两次算
   const slipMul = pb.via === "usdt" ? (1 + Number(swapSlip) / 100) ** 2 : 1 + Number(swapSlip) / 100;
-  const bnbAmt = (Number(ethers.formatEther(deficit)) / pb.perBnb * slipMul).toFixed(6);
+  const bnbAmt = (qNum(deficit) / pb.perBnb * slipMul).toFixed(6);
   log(`底池币不够,用 ${bnbAmt} BNB 兑换(约 ${pb.perBnb.toFixed(4)} 个/BNB${pb.via === "usdt" ? ",Ondo 类底池币,经 USDT 中转" : ""},滑点 ${swapSlip}%)`);
   if (DRY) { log("--dry:不兑换"); process.exit(0); }
   let got;
@@ -132,7 +156,7 @@ if (have < input) {
   if (have < need) die(`底池币还是不够(有 ${fmt(have, 4)},需 ${fmt(need, 4)})`);
 }
 const spend = have < input ? have : input;
-const spendStr = ethers.formatEther(spend);
+const spendStr = ethers.formatEther(spend);   // 传给 gang CLI:它按 18 位解析,这里也按 18 位写,原始单位不变
 
 let pv = await gang(["buy", "--token", ca, "--bnb", spendStr, "--slippage", slip]);
 if (pv.step === "approve-quote") {

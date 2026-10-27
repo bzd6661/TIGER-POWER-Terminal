@@ -13,6 +13,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { provider } from "./detect.mjs";
 import { bnbUsd } from "./prices.mjs";
+import { flapTrades, isGatedKnown } from "./flapnft.mjs";
+import { loadTrades, saveTrades, loadBars, saveBars, fetchJsonCached } from "./cache.mjs";
 
 const CORE = "0xebe7b6C1089D9F72aD07f34E36d898e44E5e27f3";
 const coreI = new ethers.Interface([
@@ -38,6 +40,14 @@ async function fourTradesOnce(ca) {
   const head = parseInt(await logRpc("eth_blockNumber", []), 16);
   let c = fourCache.get(ca);
   if (!c) {
+    // 有历史缓存:从上次拉到的块往前 15 个块接着拉(防链重组,重复的按 tx:logIndex 去重)
+    const ch = await loadTrades("four", ca);
+    if (ch?.rows.length) {
+      c = { last: ch.cursor - 15, rows: ch.rows, seen: new Set(ch.rows.map((r) => r.tx + ":" + r.li)) };
+      fourCache.set(ca, c);
+    }
+  }
+  if (!c) {
     // 从创建区块查起;没配自己的节点时公共节点只能查最近约 1 小时,更早的成交查不到(页面会提示)
     let from = createdBlockOf(ca) ?? head - 200_000;
     if (!HAS_PRIVATE && head - from > PUBLIC_WINDOW) { from = head - PUBLIC_WINDOW; c_partial.add(ca); }
@@ -45,6 +55,7 @@ async function fourTradesOnce(ca) {
     fourCache.set(ca, c);
   }
   const topic = ethers.zeroPadValue(ca, 32);
+  const added = [];
   for (let a = c.last + 1; a <= head; a += 5000) {
     const b = Math.min(a + 4999, head);
     const logs = await logRpc("eth_getLogs", [{ address: CORE, topics: [T_TRADE, topic], fromBlock: "0x" + a.toString(16), toBlock: "0x" + b.toString(16) }]);
@@ -54,11 +65,14 @@ async function fourTradesOnce(ca) {
       if (c.seen.has(key)) continue;   // 去重:同一条日志只记一次
       c.seen.add(key);
       const d = coreI.parseLog(l).args;
-      c.rows.push({ blk: parseInt(l.blockNumber, 16), li: parseInt(l.logIndex, 16), side: d.isBuy ? "buy" : "sell", trader: d.trader.toLowerCase(), tx: l.transactionHash,
-        quote: fmt(d.traderQuoteAmount), tokens: fmt(d.tokenAmount), price: fmt(d.lastPrice) });
+      const row = { blk: parseInt(l.blockNumber, 16), li: parseInt(l.logIndex, 16), side: d.isBuy ? "buy" : "sell", trader: d.trader.toLowerCase(), tx: l.transactionHash,
+        quote: fmt(d.traderQuoteAmount), tokens: fmt(d.tokenAmount), price: fmt(d.lastPrice) };
+      c.rows.push(row); added.push(row);
     }
     c.last = b;
   }
+  // 只查到最近一段(公共节点)的不写缓存:下次配了自己的节点还能从头补全
+  if (!c_partial.has(ca)) saveTrades("four", ca, added.map((r) => ({ ...r, ts: r.blk })), c.last, (r) => r.tx + ":" + r.li);
   // 区块号 → 时间:最新块时间戳 + 实测出块间隔
   const lb = await provider.getBlock("latest");
   const ob = await provider.getBlock(lb.number - 20000).catch(() => null);
@@ -75,12 +89,13 @@ function gangRow(t, v2) {
   return { ts: t.ts, side: t.side, trader: t.trader, handle: t.traderHandle || null, tx: t.tx, quote: t.side === "buy" ? base + fee : base, fee, tokens: Number(t.tokens), price: Number(t.price) };
 }
 async function gangTrades(ca, v2, max = 20000) {
+  if (!gangSeen.has(ca)) { const ch = await loadTrades("gang", ca); if (ch?.cursor === 1 && ch.rows.length) gangSeen.set(ca, ch.rows); }
   const old = gangSeen.get(ca), known = old ? new Set(old.map(gKey)) : null;
   const out = [];
   let hitOld = false;
   // 第一次拉:接口每页最多 200 笔、每次要 2~5 秒,按 4 页一批并发拉(到某一页不满 200 笔为止)
   if (!known) {
-    const page = (off) => fetch(`https://gang.fun/api/${v2 ? "stocks/tokens" : "tokens"}/${ca}/trades?limit=200&offset=${off}&sort=ts_desc`, { signal: AbortSignal.timeout(20000) }).then((r) => r.json());
+    const page = (off) => fetch(`https://gang.fun/api/${v2 === "v3" ? "v3/tokens" : v2 ? "stocks/tokens" : "tokens"}/${ca}/trades?limit=200&offset=${off}&sort=ts_desc`, { signal: AbortSignal.timeout(20000) }).then((r) => r.json());
     const pages = [];
     for (let off = 0; off < max; off += 800) {
       const batch = await Promise.all([0, 200, 400, 600].map((d) => page(off + d)));
@@ -90,11 +105,12 @@ async function gangTrades(ca, v2, max = 20000) {
     for (const j of pages) for (const t of j.items ?? []) out.push(gangRow(t, v2));
     const seen = new Set(), all = out.filter((t) => { const k = gKey(t); if (seen.has(k)) return false; seen.add(k); return true; });
     gangSeen.set(ca, all);
+    saveTrades("gang", ca, all, all.length < max ? 1 : 0, gKey);   // 1 = 从开盘起拉全了
     if (gangSeen.size > 40) gangSeen.delete(gangSeen.keys().next().value);
     return all;
   }
   for (let off = 0; off < max && !hitOld;) {
-    const j = await fetch(`https://gang.fun/api/${v2 ? "stocks/tokens" : "tokens"}/${ca}/trades?limit=200&offset=${off}&sort=ts_desc`, { signal: AbortSignal.timeout(15000) }).then((r) => r.json());
+    const j = await fetch(`https://gang.fun/api/${v2 === "v3" ? "v3/tokens" : v2 ? "stocks/tokens" : "tokens"}/${ca}/trades?limit=200&offset=${off}&sort=ts_desc`, { signal: AbortSignal.timeout(15000) }).then((r) => r.json());
     // 金额口径(用链上 Transfer / 发射台事件核对过):接口的 quoteIn(V2)/ bnb(V1)不含平台费 ——
     //   买入:交易者实际付出 = 金额 + 平台费(V2 还有分红税);卖出:金额就是实际到手。
     for (const t of j.items ?? []) out.push(gangRow(t, v2));
@@ -103,7 +119,7 @@ async function gangTrades(ca, v2, max = 20000) {
     off = j.nextOffset ?? off + (j.items ?? []).length;
   }
   let all = out;
-  if (hitOld) { const fresh = out.filter((t) => !known.has(gKey(t))); all = fresh.concat(old); }
+  if (hitOld) { const fresh = out.filter((t) => !known.has(gKey(t))); all = fresh.concat(old); saveTrades("gang", ca, fresh, 1, gKey); }
   gangSeen.set(ca, all);
   if (gangSeen.size > 40) gangSeen.delete(gangSeen.keys().next().value);
   return all;
@@ -124,20 +140,81 @@ async function idagentTrades(market) {
 
 // ---------- 外盘:DexScreener 找池子 → GeckoTerminal 分钟 K 线(美元) ----------
 const dexCache = new Map();
-async function dexBars(ca) {
-  const hit = dexCache.get(ca);
-  if (hit && Date.now() - hit.at < 30_000) return hit.v;
+// 更早的外盘 K 线(往前翻出来的页)不会再变:按池子单独缓存,每 30 秒刷新时只重拉最新一页
+const oldBars = new Map();   // pool → { bars, at }
+// GeckoTerminal 免费接口约 30 次 / 分钟(收藏栏每个外盘币都会定时拉 K 线,很容易超):
+//   所有请求排成一队,两次之间至少隔 2.2 秒;碰到 429 就停 2 分钟(期间返回 null,调用方沿用旧数据)
+let geckoLimitedUntil = 0, geckoQueue = Promise.resolve(), geckoLast = 0;
+function gecko(pool, ca, tf, agg, before) {
+  const url = `https://api.geckoterminal.com/api/v2/networks/bsc/pools/${pool}/ohlcv/${tf}?aggregate=${agg}&limit=1000&currency=usd&token=${ca}${before ? "&before_timestamp=" + before : ""}`;
+  const job = geckoQueue.then(async () => {
+    if (Date.now() < geckoLimitedUntil) return null;
+    const wait = geckoLast + 2200 - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    geckoLast = Date.now();
+    const r = await fetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(12000) });
+    if (r.status === 429) { geckoLimitedUntil = Date.now() + 120_000; console.error("[K线] GeckoTerminal 限流,暂停 2 分钟(外盘 K 线先用旧的)"); return null; }
+    if (!r.ok) return null;
+    const g = await r.json();
+    return (g.data?.attributes?.ohlcv_list ?? []).map(([t, o, h, l, c, vol]) => ({ t, o, h, l, c, v: vol }));
+  }).catch(() => null);
+  geckoQueue = job;
+  return job;
+}
+// 最新一页之前到 since(内盘最后一笔)之间的 K 线:缺口 2 天以内按分钟线往前翻(最多 3 页);更长的直接用一页小时线(1000 根 ≈ 41 天)
+async function backfill(pool, ca, firstT, since) {
+  const k = pool.toLowerCase(), hit = oldBars.get(k);
+  if (hit && (hit.bars.length ? hit.bars[hit.bars.length - 1].t >= firstT - 3600 : Date.now() - hit.at < 600_000)) return hit.bars;   // 翻不到更早的也记 10 分钟,别每次都去问
+  // 缓存里已经有从 since 到 firstT 的 K 线(上次补过):直接用,不再问 GeckoTerminal
+  const stored = (await loadBars(pool, since - 3600)).filter((b) => b.t < firstT);
+  if (stored.length && stored[0].t <= since + 3600 && stored[stored.length - 1].t >= firstT - 3600) {
+    oldBars.set(k, { bars: stored, at: Date.now() });
+    return stored;
+  }
+  let bars = [], before = firstT, failed = false;
+  if (firstT - since <= 2 * 86400) {
+    for (let i = 0; i < 3 && before > since + 60; i++) {
+      const pg = await gecko(pool, ca, "minute", 1, before);
+      if (!pg) { failed = true; break; }
+      const older = pg.filter((b) => b.t < before);
+      if (!older.length) break;
+      bars = bars.concat(older);
+      before = Math.min(...older.map((b) => b.t));
+    }
+  } else {
+    const pg = await gecko(pool, ca, "hour", 1, before);
+    if (!pg) failed = true;
+    else bars = pg.filter((b) => b.t < before && b.t + 3600 > since);
+  }
+  bars.sort((a, b) => a.t - b.t);
+  if (bars.length) saveBars(pool, bars);
+  if (!failed || bars.length) { oldBars.set(k, { bars, at: Date.now() }); if (oldBars.size > 30) oldBars.delete(oldBars.keys().next().value); }
+  return bars;
+}
+// withBars=false:只要现价(底池币的美元价),不拉 K 线
+async function dexBars(ca, since = null, withBars = true) {
+  const key = withBars ? ca : ca + ":price", hit = dexCache.get(key);
+  if (hit && Date.now() - hit.at < 60_000) return hit.v;   // 60 秒:K 线 1 分钟一根,刷得更勤也没新东西,还容易被限流
   let v = { bars: [], pool: null, priceUsd: null, mcapUsd: null, liqUsd: null };
   try {
-    const ds = await fetch("https://api.dexscreener.com/tokens/v1/bsc/" + ca, { signal: AbortSignal.timeout(10000) }).then((r) => r.json());
+    const ds = await fetchJsonCached("https://api.dexscreener.com/tokens/v1/bsc/" + ca, 15, { timeout: 10000 });
     const ps = (Array.isArray(ds) ? ds : []).filter((x) => x.baseToken?.address?.toLowerCase() === ca && Number(x.priceUsd)).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0));
     if (ps[0]) {
       v = { bars: [], pool: ps[0].pairAddress, dex: ps[0].dexId, priceUsd: Number(ps[0].priceUsd), mcapUsd: Number(ps[0].marketCap || ps[0].fdv) || null, liqUsd: ps[0].liquidity?.usd ?? null };
-      const g = await fetch(`https://api.geckoterminal.com/api/v2/networks/bsc/pools/${v.pool}/ohlcv/minute?aggregate=1&limit=1000&currency=usd&token=${ca}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(12000) }).then((r) => r.json()).catch(() => null);
-      v.bars = (g?.data?.attributes?.ohlcv_list ?? []).map(([t, o, h, l, c, vol]) => ({ t, o, h, l, c, v: vol })).sort((a, b) => a.t - b.t);
+      // 被限流 / 超时(拿到 null)时沿用上一次的 K 线,不要把图清空成只剩内盘
+      const fresh = withBars ? await gecko(v.pool, ca, "minute", 1, null) : [];
+      if (fresh?.length) saveBars(v.pool, fresh);
+      // 拿不到最新一页(限流 / 超时):用上一次的,没有就用缓存里最近 1000 分钟的
+      v.bars = fresh ? fresh.sort((a, b) => a.t - b.t) : hit?.v?.bars ?? (await loadBars(v.pool, Math.floor(Date.now() / 1000) - 60_000));
+      // 毕业早于最新一页:往前补,让内盘和外盘的 K 线接上
+      if (since && v.bars.length && v.bars[0].t > since + 120) {
+        const older = await backfill(v.pool, ca, v.bars[0].t, since);
+        if (older.length) v.bars = older.filter((b) => b.t < v.bars[0].t).concat(v.bars);
+      }
     }
   } catch {}
-  dexCache.set(ca, { at: Date.now(), v });
+  dexCache.set(key, { at: Date.now(), v });
+  if (dexCache.size > 100) dexCache.delete(dexCache.keys().next().value);
   return v;
 }
 
@@ -149,7 +226,7 @@ export async function quoteUsdOf(q, fallback) {
   if (!ethers.isAddress(q)) return null;
   const k = q.toLowerCase(), hit = usdCache.get(k);
   if (hit && Date.now() - hit.at < 60_000) return hit.v;
-  const v = await dexBars(k).then((x) => x.priceUsd).catch(() => null);
+  const v = await dexBars(k, null, false).then((x) => x.priceUsd).catch(() => null);
   usdCache.set(k, { at: Date.now(), v });
   return v;
 }
@@ -173,12 +250,15 @@ async function historyOnce(d) {
   const ca = d.ca.toLowerCase();
   let trades = [], source = null;
   if (d.platform === "four") { trades = await fourTrades(ca); source = "链上 TradeExecuted"; }
-  else if (d.platform === "gangv1" || d.platform === "gangv2") { trades = await gangTrades(ca, d.platform === "gangv2"); source = "gang.fun"; }
+  else if (d.platform === "gangv1" || d.platform === "gangv2" || d.platform === "gangv3") { trades = await gangTrades(ca, d.platform === "gangv3" ? "v3" : d.platform === "gangv2"); source = "gang.fun"; }
   else if (d.platform === "idagent" && d.market) { trades = await idagentTrades(d.market); source = "fsi.taxed.fun"; }
+  // Flap Portal 盘(门槛盘):Portal 的 TokenBought / TokenSold 事件;已发射又不在门槛盘登记表里的不翻链(外盘部分走 K 线)
+  else if (d.platform === "flapportal" && (d.stage === "inner" || isGatedKnown(ca))) { trades = await flapTrades(ca); source = "Flap Portal 链上事件"; if (!HAS_PRIVATE) c_partial.add(ca); }
   // 底池币美元价:Gang V2 用 gang 接口给的,Flap 内盘 的 quote 是地址
-  const qUsd = await quoteUsdOf(d.platform === "gangv2" ? d.quote : d.quote, d.platform === "gangv2" ? d.quoteUsd : null);
-  const supply = d.platform === "four" ? d.supply : d.platform?.startsWith("gang") || d.platform === "idagent" ? 1e9 : null;
-  const dex = d.stage === "outer" ? await dexBars(ca) : null;
+  const qUsd = await quoteUsdOf(d.platform === "flapportal" ? d.quoteAddress ?? "BNB" : d.quote, d.platform === "gangv2" || d.platform === "gangv3" || d.platform === "flapportal" ? d.quoteUsd : null);
+  const supply = d.platform === "four" ? d.supply : d.platform?.startsWith("gang") || d.platform === "idagent" || d.platform === "flapportal" ? 1e9 : null;
+  // 外盘 K 线要往前补到内盘最后一笔成交,毕业前后才接得上(trades 新的在前)
+  const dex = d.stage === "outer" ? await dexBars(ca, trades[0]?.ts ?? null) : null;
   const v = {
     source, partial: c_partial.has(ca), quote: d.quote, quoteUsd: qUsd, supply: supply ?? (dex?.mcapUsd && dex?.priceUsd ? dex.mcapUsd / dex.priceUsd : null),
     supplyNote: d.platform === "idagent" ? "Flap 内盘 按 1 份额 = 1 代币、总量 10 亿估算" : null,

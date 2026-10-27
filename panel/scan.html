@@ -6,6 +6,7 @@
 <title>TIGER POWER · 扫链</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <script src="/i18n.js"></script>
+<script src="/update.js" defer></script>
 <style>
   :root {
     --bg:#0a0c0f; --s1:#101318; --s2:#151920; --s3:#1b2029; --line:#1e232c; --line2:#2a313d;
@@ -96,7 +97,7 @@
   .ring .lg { position:relative; width:100%; height:100%; border-radius:10px; overflow:hidden; background:var(--s3); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; color:var(--mute); }
   .ring .lg img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   .ring .plat { position:absolute; right:-3px; bottom:-3px; font-size:9px; font-weight:700; padding:0 4px; border-radius:4px; border:1px solid var(--bg); color:#0a0c0f; }
-  .p-four { background:#f0b90b; } .p-gangv1, .p-gangv2 { background:#e86aa6; } .p-idagent { background:#8fb3ff; }
+  .p-four { background:#f0b90b; } .p-gangv1, .p-gangv2, .p-gangv3 { background:#e86aa6; } .p-idagent { background:#8fb3ff; } .p-flapportal { background:#b48bff; }
   .mid { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
   .r1 { display:flex; align-items:center; gap:6px; min-width:0; }
   .r1 .sym { font-weight:700; font-size:14px; white-space:nowrap; }
@@ -112,6 +113,7 @@
   .r3 b { color:var(--text); font-weight:500; }
   .tags { display:flex; gap:4px; flex-wrap:wrap; }
   .tg { font-size:10px; padding:0 5px; border-radius:4px; border:1px solid var(--line2); color:var(--mute); white-space:nowrap; line-height:16px; }
+  .xs { margin-left:4px; padding:0 5px; border-radius:4px; border:1px solid var(--line2, #2a2f36); font-size:11px; cursor:pointer; color:var(--mute, #8b93a1); } .xs:hover { color:var(--text, #fff); border-color:var(--acc); }
   .tg.fee { color:#9fb4d8; border-color:#2b3a55; } .tg.bad { color:var(--down); border-color:rgba(234,57,67,.4); } .tg.good { color:var(--up); border-color:rgba(22,199,132,.4); } .tg.q { color:var(--acc); border-color:rgba(240,185,11,.35); }
   .rt { flex:none; display:flex; flex-direction:column; align-items:flex-end; justify-content:space-between; gap:4px; }
   .rt .mc { font-size:11px; color:var(--faint); } .rt .mc b { font-size:15px; color:var(--text); font-weight:700; }
@@ -179,6 +181,7 @@
   <label class="pchip"><input type="checkbox" class="pf" value="four" checked><span class="pd p-four"></span>four</label>
   <label class="pchip"><input type="checkbox" class="pf" value="gang" checked><span class="pd p-gangv1"></span>Gang</label>
   <label class="pchip"><input type="checkbox" class="pf" value="idagent" checked><span class="pd p-idagent"></span>Flap</label>
+  <label class="pchip" title="Flap 普通 Portal 上的 NFT 门槛盘(大多要持有币安 Agent ID 才能在内盘买卖)"><input type="checkbox" class="pf" value="flapportal" checked><span class="pd p-flapportal"></span>Flap 门槛</label>
   <button class="iconbtn" id="fBtn" style="height:26px">筛选</button>
   <span class="faint" id="blockInfo"></span>
   <span class="status" id="status">加载中…(第一次要回扫 four 历史,约 20 秒)</span>
@@ -322,9 +325,29 @@ function openFilters() {
 $("fBtn").onclick = (e) => { e.stopPropagation(); openFilters(); };
 document.addEventListener("click", (e) => { if (!$("fPanel").hidden && !e.target.closest("#fPanel")) $("fPanel").hidden = true; });
 
+function divTag(t, cls = "tg") {
+  if (t.dividend === null || t.dividend === undefined) return "";
+  const en = window.UI_LANG === "en";
+  // Gang V3:税率和分红比例是发币时自己设的,毕业后才在外盘收(内盘只收 1% 手续费)
+  if (t.platform === "gangv3") {
+    const tb = t.postTaxBuy ?? 0, ts = t.postTaxSell ?? 0, dp = t.dividendPct ?? 0;
+    const tax = en ? `buy ${tb}% / sell ${ts}% tax on DEX trades after graduation (curve trades pay only the 1% fee)` : `毕业后外盘买 ${tb}% / 卖 ${ts}% 税(内盘只收 1% 手续费)`;
+    if (!t.dividend) return `<span class="${cls}" title="${en ? "V3 token: " + tax + "; no dividends" : "V3 税币:" + tax + ",不分红"}">不分红</span>`;
+    return `<span class="${cls} good" title="${en ? `V3 token: ${tax}; ${dp}% of the tax goes pro rata to holders of 10K+ tokens, paid in the quote token` : `V3 税币:${tax},税的 ${dp}% 按持仓分给持有 ≥1 万枚的地址(用底池币发)`}">分红 ${dp}%</span>`;
+  }
+  if (!t.dividend) return `<span class="${cls}" title="${en ? "Plain token: 1% platform fee on the curve, no tax and no dividends after graduation" : "普通币:内盘收 1% 平台费,毕业后 0 税,不分红"}">不分红</span>`;
+  const v = t.div, u = (x) => "$" + (x >= 1000 ? (x / 1000).toFixed(1) + "K" : x.toFixed(2));
+  const sym = esc(v?.sym ?? (en ? "quote token" : "底池币"));
+  const more = !v ? "" : en
+    ? `&#10;Paid in ${sym} · total ${u(v.totalUsd)} · last 7d ${u(v.d7Usd)} · per 10K tokens ${u(v.per10kUsd)}${v.apr ? " · APR " + v.apr.toFixed(1) + "%" : ""}${v.vault ? "&#10;Dividend vault " + esc(v.vault) : ""}`
+    : `&#10;分红币 ${sym} · 累计 ${u(v.totalUsd)} · 近 7 天 ${u(v.d7Usd)} · 每万枚 ${u(v.per10kUsd)}${v.apr ? " · 年化 " + v.apr.toFixed(1) + "%" : ""}${v.vault ? "&#10;分红金库 " + esc(v.vault) : ""}`;
+  const head = en ? "Taxed token: 1% tax on curve and DEX trades; half is shared pro rata with holders of 10K+ tokens, paid in the quote token" : "税币:内盘和外盘买卖收 1% 税,一半按持仓分给持有 ≥1 万枚的地址(用底池币发)";
+  return `<span class="${cls} good" title="${head}${more}">分红</span>`;
+}
 // 费率 / 风险标签
 function tagsOf(t) {
   const out = [];
+  if (t.platform?.startsWith("gang")) { const dv = divTag(t); if (dv) out.push(dv); }
   if (t.feeBuy != null) out.push(`<span class="tg fee" title="内盘手续费 买 / 卖(链上核对过)">费 ${+t.feeBuy.toFixed(2)}/${t.feeSell != null ? +t.feeSell.toFixed(2) : "?"}%</span>`);
   if (t.anti > 0) out.push(`<span class="tg bad" title="防狙击税:最近一笔成交时${t.feeAt ? "(" + age(t.feeAt) + "前)" : ""}是这个数,会随开盘时间递减;下单前以报价为准">防狙 ${+t.anti.toFixed(2)}%</span>`);
   const pb = t.postTaxBuy ?? t.postTax, ps = t.postTaxSell ?? t.postTax;
@@ -340,7 +363,7 @@ function tagsOf(t) {
   if (isBlocked(t)) out.push('<span class="tg bad">已屏蔽</span>');
   return out.join("");
 }
-const PL = { four: "F", gangv1: "G1", gangv2: "G2", idagent: "ID" };
+const PL = { four: "F", gangv1: "G1", gangv2: "G2", gangv3: "G3", idagent: "ID", flapportal: "🔒" };
 function ring(t, size = "") {
   const p = t.graduated ? 100 : Math.max(0, Math.min(100, t.progress ?? 0));
   const col = t.graduated ? "var(--blue)" : p >= 30 ? "var(--acc)" : "var(--up)";
@@ -358,7 +381,7 @@ function card(t) {
     <div class="mid">
       <div class="r1"><span class="sym">${esc(t.symbol)}</span><span class="nm">${esc(t.name && t.name !== t.symbol ? t.name : "")}</span>
         <span class="acts"><button class="fav ${isFav(t) ? "on" : ""}" data-fav="${esc(t.ca)}" title="${isFav(t) ? "取消收藏" : "收藏"}">${isFav(t) ? "★" : "☆"}</button><button class="blk ${isBlocked(t) ? "on" : ""}" data-blk="${esc(t.ca)}" title="屏蔽">⊘</button></span></div>
-      <div class="r2">${t.createdAt ? `<span class="age">${age(t.createdAt)}</span>` : ""}<span class="ca" data-copy="${esc(t.ca)}" title="点击复制 CA">${short(t.ca)}</span>${t.creatorHandle ? `<span title="开发者">👤${esc(t.creatorHandle)}</span>` : ""}${t.lastTradeAt ? `<span title="最近成交">· ${age(t.lastTradeAt)}前</span>` : ""}</div>
+      <div class="r2">${t.createdAt ? `<span class="age">${age(t.createdAt)}</span>` : ""}<span class="ca" data-copy="${esc(t.ca)}" title="点击复制 CA">${short(t.ca)}</span><span class="xs" data-xs="${esc(t.ca)}" title="在 X 上搜这个 CA(看谁在喊)">𝕏</span>${t.creatorHandle ? `<span title="开发者">👤${esc(t.creatorHandle)}</span>` : ""}${t.lastTradeAt ? `<span title="最近成交">· ${age(t.lastTradeAt)}前</span>` : ""}</div>
       <div class="r3"><span title="持有人">👥 <b>${g?.holders ?? t.holders ?? "—"}</b></span><span title="成交笔数">TX <b>${g?.swaps24h ?? t.txs ?? "—"}</b></span><span title="成交额${g?.volume24hUsd ? "(24h)" : t.volumeLabel ? "(" + t.volumeLabel + ")" : ""}">V <b>${vol ? "$" + num(vol) : money(t.volume, t.quote)}</b></span></div>
       <div class="tags">${tagsOf(t)}</div>
     </div>
@@ -439,7 +462,7 @@ function renderList() {
     const st = stOf(t), mc = mcOf(t), vol = volOf(t), prog = t.graduated ? null : t.progress;
     return `<tr class="${isBlocked(t) ? "blocked" : ""}" data-open="${esc(t.ca)}">
       <td><div class="tk">${ring(t)}<div style="min-width:0"><div><b>${esc(t.symbol)}</b> <span class="faint">${esc(t.name && t.name !== t.symbol ? t.name : "").slice(0, 24)}</span></div>
-        <div class="tags" style="margin-top:2px">${tagsOf(t)}<span class="faint ca" data-copy="${esc(t.ca)}" title="点击复制">${short(t.ca)}</span></div></div></div></td>
+        <div class="tags" style="margin-top:2px">${tagsOf(t)}<span class="faint ca" data-copy="${esc(t.ca)}" title="点击复制">${short(t.ca)}</span><span class="xs" data-xs="${esc(t.ca)}" title="在 X 上搜这个 CA(看谁在喊)">𝕏</span></div></div></div></td>
       <td><b>${mc ? "$" + num(mc) : "—"}</b></td>
       <td>${prog !== null && prog !== undefined ? `<span class="pbar"><i style="width:${Math.max(0, Math.min(100, prog))}%"></i></span>${prog.toFixed(1)}%` : t.status && t.status !== "内盘" ? esc(t.status) : '<span style="color:var(--blue)">已开盘</span>'}</td>
       <td>${vol ? "$" + num(vol) : "—"}</td>
@@ -476,12 +499,13 @@ function bindButtons() {
   }));
   document.querySelectorAll("[data-blk]").forEach((b) => (b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); openBlockMenu(b, data.tokens.find((x) => x.ca === b.dataset.blk)); }));
   document.querySelectorAll("[data-buy]").forEach((b) => (b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); quickBuy(b.dataset.buy); }));
+  document.querySelectorAll("[data-xs]").forEach((x) => (x.onclick = (e) => { e.preventDefault(); e.stopPropagation(); window.open("https://x.com/search?q=" + x.dataset.xs + "&f=live", "_blank", "noopener"); }));
   document.querySelectorAll("[data-copy]").forEach((x) => (x.onclick = (e) => {
     e.preventDefault(); e.stopPropagation();
     navigator.clipboard?.writeText(x.dataset.copy).then(() => toast("CA 已复制:" + x.dataset.copy, "ok"), () => {});
   }));
   // 列表行点击打开(卡片本身是链接,中键 / Ctrl 可新标签打开)
-  document.querySelectorAll("tr[data-open]").forEach((r) => (r.onclick = (e) => { if (!e.target.closest("button,[data-copy]")) location.href = "/?ca=" + r.dataset.open; }));
+  document.querySelectorAll("tr[data-open]").forEach((r) => (r.onclick = (e) => { if (!e.target.closest("button,[data-copy],[data-xs]")) location.href = "/?ca=" + r.dataset.open; }));
 }
 function openBlockMenu(anchor, t) {
   closeBlockMenu();

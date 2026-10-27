@@ -6,6 +6,7 @@
 <title>TIGER POWER · 内盘交易终端</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <script src="/i18n.js"></script>
+<script src="/update.js" defer></script>
 <style>
   :root {
     --bg:#0a0c0f; --s1:#101318; --s2:#151920; --s3:#1b2029; --line:#1e232c; --line2:#2a313d;
@@ -103,7 +104,8 @@
   .tsym { font-size:18px; font-weight:700; } .tname { color:var(--mute); margin-left:10px; font-size:13px; } .tname b { color:var(--text, #e6e6e6); font-weight:600; }
   .badges { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:3px; }
   .bdg { font-size:11px; padding:1px 7px; border-radius:5px; background:var(--s3); color:var(--mute); }
-  .bdg.inner { color:var(--up); background:var(--up-bg); } .bdg.outer { color:var(--acc); background:rgba(240,185,11,.12); } .bdg.bad { color:var(--down); background:var(--down-bg); }
+  table.allpos td { vertical-align:top; } table.allpos td div { font-size:11px; } table.allpos .acts { white-space:nowrap; text-align:right; } table.allpos .acts button { margin-left:4px; padding:3px 8px; font-size:12px; } table.allpos tr.sum td { border-top:1px solid var(--line2); }
+  .bdg.inner { color:var(--up); background:var(--up-bg); } .bdg.outer { color:var(--acc); background:rgba(240,185,11,.12); } .bdg.bad { color:var(--down); background:var(--down-bg); } .xs { margin-left:6px; padding:1px 7px; border-radius:999px; border:1px solid var(--line2); font-size:11px; color:var(--mute); text-decoration:none; white-space:nowrap; } .xs:hover { color:var(--text); border-color:var(--acc); } .bdg.good { color:var(--up); background:var(--up-bg); }
   .ca { font-size:12px; color:var(--faint); cursor:pointer; } .ca:hover { color:var(--text); }
   .links { margin-left:auto; display:flex; gap:6px; }
   .links a { font-size:12px; color:var(--mute); text-decoration:none; padding:4px 9px; border:1px solid var(--line); border-radius:7px; } .links a:hover { color:var(--text); border-color:var(--line2); }
@@ -391,7 +393,7 @@
     <div id="tokenHead"><div class="empty">加载账户…</div></div>
     <div id="tokenBody" hidden>
       <div class="chart" id="chart"></div>
-      <div class="tabs"><button data-t="trades" class="on">成交</button><button data-t="duel" id="duelTab" hidden>多空对决</button><button data-t="pos">持仓明细</button><button data-t="feed">全市场</button><span class="faint" style="margin-left:auto;align-self:center;font-size:11px">快捷键:按住空格 + W 买 1% · 空格 + F 清仓</span></div>
+      <div class="tabs"><button data-t="trades" class="on">成交</button><button data-t="duel" id="duelTab" hidden>多空对决</button><button data-t="pos">所有持仓</button><button data-t="feed">全市场</button><span class="faint" style="margin-left:auto;align-self:center;font-size:11px">快捷键:按住空格 + W 买 1% · 空格 + F 清仓</span></div>
       <div class="tabbody" id="tabbody"></div>
     </div>
   </section>
@@ -464,6 +466,26 @@
 </div>
 
 <script>
+function divTag(t, cls = "tg") {
+  if (t.dividend === null || t.dividend === undefined) return "";
+  const en = window.UI_LANG === "en";
+  // Gang V3:税率和分红比例是发币时自己设的,毕业后才在外盘收(内盘只收 1% 手续费)
+  if (t.platform === "gangv3") {
+    const tb = t.postTaxBuy ?? 0, ts = t.postTaxSell ?? 0, dp = t.dividendPct ?? 0;
+    const tax = en ? `buy ${tb}% / sell ${ts}% tax on DEX trades after graduation (curve trades pay only the 1% fee)` : `毕业后外盘买 ${tb}% / 卖 ${ts}% 税(内盘只收 1% 手续费)`;
+    if (!t.dividend) return `<span class="${cls}" title="${en ? "V3 token: " + tax + "; no dividends" : "V3 税币:" + tax + ",不分红"}">不分红</span>`;
+    return `<span class="${cls} good" title="${en ? `V3 token: ${tax}; ${dp}% of the tax goes pro rata to holders of 10K+ tokens, paid in the quote token` : `V3 税币:${tax},税的 ${dp}% 按持仓分给持有 ≥1 万枚的地址(用底池币发)`}">分红 ${dp}%</span>`;
+  }
+  if (!t.dividend) return `<span class="${cls}" title="${en ? "Plain token: 1% platform fee on the curve, no tax and no dividends after graduation" : "普通币:内盘收 1% 平台费,毕业后 0 税,不分红"}">不分红</span>`;
+  const v = t.div, u = (x) => "$" + (x >= 1000 ? (x / 1000).toFixed(1) + "K" : x.toFixed(2));
+  const sym = esc(v?.sym ?? (en ? "quote token" : "底池币"));
+  const more = !v ? "" : en
+    ? `&#10;Paid in ${sym} · total ${u(v.totalUsd)} · last 7d ${u(v.d7Usd)} · per 10K tokens ${u(v.per10kUsd)}${v.apr ? " · APR " + v.apr.toFixed(1) + "%" : ""}${v.vault ? "&#10;Dividend vault " + esc(v.vault) : ""}`
+    : `&#10;分红币 ${sym} · 累计 ${u(v.totalUsd)} · 近 7 天 ${u(v.d7Usd)} · 每万枚 ${u(v.per10kUsd)}${v.apr ? " · 年化 " + v.apr.toFixed(1) + "%" : ""}${v.vault ? "&#10;分红金库 " + esc(v.vault) : ""}`;
+  const head = en ? "Taxed token: 1% tax on curve and DEX trades; half is shared pro rata with holders of 10K+ tokens, paid in the quote token" : "税币:内盘和外盘买卖收 1% 税,一半按持仓分给持有 ≥1 万枚的地址(用底池币发)";
+  return `<span class="${cls} good" title="${head}${more}">分红</span>`;
+}
+
 const TOKEN_INIT = "__PANEL_TOKEN__";
 let TOKEN = TOKEN_INIT;
 const $ = (id) => document.getElementById(id);
@@ -642,7 +664,7 @@ function renderHead() {
   $("tokenHead").innerHTML = `
     <div class="thead">${logo(d.ca, d.symbol)}
       <div style="min-width:0"><div><span class="tsym" title="名称">${esc(d.name || d.symbol)}</span><span class="tname">Ticker <b>$${esc(d.symbol)}</b></span></div>
-        <div class="badges"><span class="bdg ${inner ? "inner" : "outer"}">${inner ? "内盘" : "外盘"}</span><span class="bdg">${esc(d.platformLabel)}</span>${d.taxed ? '<span class="bdg bad">有税</span>' : ""}${d.paused ? '<span class="bdg bad">已暂停</span>' : ""}${d.creatorHandle ? `<span class="bdg">开发者 ${esc(d.creatorHandle)}</span>` : ""}<span class="ca mono" id="caCopy" title="点击复制">${d.ca}</span></div></div>
+        <div class="badges"><span class="bdg ${inner ? "inner" : "outer"}">${inner ? "内盘" : "外盘"}</span><span class="bdg">${esc(d.platformLabel)}</span>${d.taxed ? '<span class="bdg bad">有税</span>' : ""}${d.platform?.startsWith("gang") ? divTag(d, "bdg") : ""}${d.paused ? '<span class="bdg bad">已暂停</span>' : ""}${d.creatorHandle ? `<span class="bdg">开发者 ${esc(d.creatorHandle)}</span>` : ""}<span class="ca mono" id="caCopy" title="点击复制">${d.ca}</span><a class="xs" href="https://x.com/search?q=${d.ca}&f=live" target="_blank" rel="noopener" title="在 X 上搜这个 CA(看谁在喊)">𝕏 搜索</a></div></div>
       <span class="htools" id="headTools"></span>
       <div class="links">${links.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n} ↗</a>`).join("")}</div>
     </div>
@@ -799,14 +821,31 @@ function renderTab() {
     document.querySelectorAll("#tabbody [data-tr]").forEach((a) => (a.onclick = () => openTrader(a.dataset.tr)));
     if (!trades.end) $("tMore").onclick = () => { $("tMore").textContent = "加载中…"; loadTrades(true); };
   } else {
-    $("tabbody").innerHTML = `<div class="poscards">${Object.entries(cur.holdings).map(([k, h]) => {
-      const c = cur.costs?.[k], p = pnlPct(h.value, c), has = h.tokens > 0 || h.shares > 0;
-      return `<div class="pcard"><div class="kv"><b>账号 ${k}</b><span class="mono faint">${esc(short(cur.wallets[k]))}</span></div>
-        <div class="p">${has ? pct(p) : '<span class="faint">未持有</span>'}</div>
-        <div class="kv"><span>持有</span><b class="num">${has ? (h.shares !== undefined ? num(h.shares) + " 份" : num(h.tokens) + " 个") : "0"}${h.pctOfSupply ? " · " + h.pctOfSupply + "%" : ""}</b></div>
-        <div class="kv"><span>现值</span><b class="num">${h.value !== undefined ? num(h.value) + " " + esc(unit) : cur.stage === "inner" ? "—" : "外盘按卖出报价"}</b></div>
-        <div class="kv"><span>成本</span><b class="num">${c ? num(c.cost) + " " + esc(c.unit) : "—"}</b></div></div>`;
-    }).join("")}</div>`;
+    // 所有持仓:每个钱包一行(持有、现值、成本、盈亏),最下面合计;每行可以只卖这个钱包的 50% 或清仓
+    const qUsd = cur.quoteUsd ?? hist?.quoteUsd ?? null;
+    const usdOf = (x) => (qUsd && x !== undefined && x !== null ? `<div class="faint">${usd(x * qUsd)}</div>` : "");
+    let tTok = 0, tVal = 0, hasVal = false, tInv = 0, tRec = 0, tPnl = 0, hasPnl = false;
+    const rows = Object.entries(cur.holdings).map(([k, h]) => {
+      const c = cur.costs?.[k], p = pnlOf(k), amt = h.shares ?? h.tokens ?? 0, has = amt > 0;
+      tTok += amt || 0;
+      if (h.value !== undefined && h.value !== null) { tVal += h.value; hasVal = true; }
+      if (c) { tInv += c.invested ?? c.cost ?? 0; tRec += c.received || 0; }
+      if (p) { tPnl += p.v; hasPnl = true; }
+      const dis = running || !has || !connected().includes(k) ? "disabled" : "";
+      return `<tr class="${has ? "" : "faint"}"><td><b>账号 ${k}</b><div class="mono faint">${esc(short(cur.wallets?.[k] ?? ""))}</div></td>
+        <td>${has ? (h.shares !== undefined ? num(h.shares) + " 份" : num(h.tokens) + " 个") : "0"}${h.pctOfSupply ? `<div class="faint">${h.pctOfSupply}%</div>` : ""}</td>
+        <td>${h.value !== undefined && h.value !== null ? num(h.value) + " " + esc(unit) + usdOf(h.value) : has ? (cur.stage === "inner" ? "—" : "外盘按卖出报价") : "—"}</td>
+        <td>${c ? num(c.invested ?? c.cost) + " " + esc(c.unit ?? unit) + (c.received ? `<div class="faint">卖回 ${num(c.received)}</div>` : "") : "—"}</td>
+        <td>${p ? `<span class="${p.v >= 0 ? "up" : "down"}">${p.v >= 0 ? "+" : ""}${num(p.v)}<div>${p.v >= 0 ? "+" : ""}${p.p.toFixed(1)}%</div></span>` : '<span class="faint">—</span>'}</td>
+        <td class="acts"><button data-asell="50" data-acct="${k}" ${dis}>卖 50%</button><button data-asell="100" data-acct="${k}" ${dis}>清仓</button></td></tr>`;
+    });
+    const n = Object.keys(cur.holdings).length;
+    const total = n > 1 ? `<tr class="sum"><td><b>合计</b></td><td>${num(tTok)}</td><td>${hasVal ? num(tVal) + " " + esc(unit) + usdOf(tVal) : "—"}</td><td>${tInv ? num(tInv) + (tRec ? `<div class="faint">卖回 ${num(tRec)}</div>` : "") : "—"}</td>
+      <td>${hasPnl ? `<span class="${tPnl >= 0 ? "up" : "down"}">${tPnl >= 0 ? "+" : ""}${num(tPnl)}${tInv ? `<div>${tPnl >= 0 ? "+" : ""}${((tPnl / tInv) * 100).toFixed(1)}%</div>` : ""}</span>` : "—"}</td><td></td></tr>` : "";
+    $("tabbody").innerHTML = n ? `<table class="num allpos"><thead><tr><th>钱包</th><th>持有</th><th>现值</th><th>成本</th><th>盈亏</th><th></th></tr></thead><tbody>${rows.join("")}${total}</tbody></table>
+      <div class="more faint" style="cursor:default">盈亏 = 现值 + 已卖回 − 累计买入;成本按交易记录算,底池币不是 BNB 的美元按现价折算</div>`
+      : '<div class="empty">还没有登录的钱包</div>';
+    document.querySelectorAll("#tabbody [data-asell]").forEach((b) => (b.onclick = () => order("sell", b.dataset.asell, b.dataset.acct)));
   }
 }
 
@@ -839,7 +878,7 @@ async function openTrader(addr) {
 }
 
 // ---------- 实时推送(链上事件 → 服务器 → 这里) ----------
-const PLAT = { four: "four", gangv1: "Gang", gangv2: "Gang V2", idagent: "Flap 内盘" };
+const PLAT = { four: "four", gangv1: "Gang", gangv2: "Gang V2", gangv3: "Gang V3", idagent: "Flap 内盘", flapportal: "Flap 门槛盘" };
 const feed = [];   // 全市场:最近的新盘 / 成交
 let es = null, esOk = false, symMap = {}, symAt = 0;
 let soundOn = false;
@@ -1126,7 +1165,7 @@ function markQbBtn() { const b = $("qbTog"); if (b) b.classList.toggle("on", qb.
 // ---------- 交易区 ----------
 function caps() {
   const d = cur, inner = d?.stage === "inner";
-  return { pct: !!d && inner && ["four", "gangv1", "gangv2"].includes(d.platform), bnb: !!d && (!inner || ["four", "idagent", "dex"].includes(d.platform)) };
+  return { pct: !!d && inner && ["four", "gangv1", "gangv2", "gangv3", "flapportal"].includes(d.platform), bnb: !!d && (!inner || ["four", "idagent", "dex", "flapportal"].includes(d.platform)) };
 }
 const SLIPS = ["", "3", "5", "10", "20", "35"];
 try { ui.slip = localStorage.getItem("slip") ?? ""; } catch { ui.slip = ""; }
@@ -1172,7 +1211,7 @@ function renderTrade() {
     ? (inner && gang ? "Gang 内盘卖出会被币安钱包风控标记;不打开上面的开关就不会提交。" : !inner ? "外盘:用币安钱包兑换卖成 BNB。" : "内盘卖回曲线,会先精确授权要卖的数量。")
     : !inner ? "外盘:用币安钱包兑换买入。"
     : d.platform === "four" ? "four.meme:超过 1% 会自动卡在上限,多付的退回。"
-    : gang ? `Gang:按代币数量买${d.platform === "gangv2" ? ",先用 BNB 换 " + unit + "、精确授权再买" : ",直接用 BNB,多付的退回"}。毕业前卖出会被钱包风控标记。`
+    : gang ? `Gang:按代币数量买${d.platform === "gangv3" && unit === "BNB" ? ",经官方 GangRouter 直接用 BNB,超过上限的以 WBNB 退回" : d.platform === "gangv2" || d.platform === "gangv3" ? ",先用 BNB 换 " + unit + "、精确授权再买" : ",直接用 BNB,多付的退回"}。毕业前卖出会被钱包风控标记。`
     : d.platform === "idagent" ? "Flap 内盘:按 BNB 买。" : "";
   renderSlip(); if ($("qbPanel")) renderQb();
   // 余额 / 持仓提示

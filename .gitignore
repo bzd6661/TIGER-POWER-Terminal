@@ -34,3 +34,8 @@ panel/txcache-*.json
 .quote-routes.json
 panel/scan-last.json
 panel/known-tokens.json
+panel/copy-tasks.json
+panel/copy-log.jsonl
+panel/flapnft.json
+panel/cache.db
+panel/cache.db-*
