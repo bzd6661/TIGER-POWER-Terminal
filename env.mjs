@@ -8,3 +8,6 @@ try {
     if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, "");
   }
 } catch { /* 没有 .env 就用默认值 */ }
+
+// 代理(中国大陆等连不上 www.binance.com 时):读完 .env 再决定,见 proxy.mjs
+await import("./proxy.mjs");

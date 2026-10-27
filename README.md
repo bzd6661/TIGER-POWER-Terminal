@@ -48,6 +48,15 @@ npm i -g @gangfun/cli
 CreateObject("WScript.Shell").Run "wscript ""D:\agentbuy\panel\daemon.vbs""", 0, False
 ```
 
+### 登录报 Connect Timeout / 连不上币安(中国大陆网络)
+
+登录、下单都要连 `www.binance.com`,中国大陆网络连不上,扫码登录会报 `Connect Timeout Error`。需要开代理:
+
+- **最简单**:打开 Clash / v2rayN 等代理软件的 **「系统代理」**,面板 30 秒内会自动用上,不用重启。
+- **或者手动指定**:在项目根目录的 `.env` 里加一行 `HTTPS_PROXY=http://127.0.0.1:端口`(Clash 一般是 7890,v2rayN 一般是 10809),然后重新双击 `start.cmd`。
+
+双击 `start.cmd` 时会自动测一次能不能连上币安,并告诉你现在走没走代理。
+
 ### 可选:`.env`(推荐配一个自己的节点)
 
 把 `.env.example` 复制成 `.env` 再填(`.env` 不会提交到 git),改完重新双击 `start.cmd` 或等面板自动重启:

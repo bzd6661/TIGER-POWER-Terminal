@@ -21,8 +21,23 @@ const up = () => fetch(URL_ + "/health", { signal: AbortSignal.timeout(1500) }).
 const open = () => { if (process.env.AGENTBUY_NO_OPEN === "1") return console.log("  → " + URL_); if (win) spawn("cmd", ["/c", "start", "", URL_], { detached: true, stdio: "ignore" }).unref(); else console.log("  打开 " + URL_); };
 const npm = (args) => spawnSync(win ? "npm.cmd" : "npm", args, { cwd: ROOT, stdio: "inherit", shell: win }).status === 0;
 
-console.log("\n内盘交易终端 · 启动检查\n");
-if (await up()) { ok(`面板已经在运行:${URL_}`); open(); process.exit(0); }
+console.log("\nTIGER POWER Terminal · 启动检查\n");
+// 能不能连上币安(登录、下单都要用;中国大陆等网络需要代理)。用子进程测,这样刚装好的依赖(代理要用)也能用上
+function netCheck() {
+  const probe = `import "./env.mjs"; import { getProxy } from "./proxy.mjs";
+const t0 = Date.now(); const p = getProxy();
+const ok = await fetch("https://www.binance.com/api/v3/ping", { signal: AbortSignal.timeout(8000) }).then((r) => r.ok).catch(() => false);
+console.log(JSON.stringify({ ok, proxy: p, ms: Date.now() - t0 }));`;
+  const r = spawnSync(process.execPath, ["--input-type=module", "-e", probe], { cwd: ROOT, encoding: "utf8", timeout: 15000 });
+  let res = null; try { res = JSON.parse(String(r.stdout).trim().split(/\r?\n/).pop()); } catch {}
+  if (res?.ok) ok(`能连上币安${res.proxy ? `(走代理 ${res.proxy})` : ""}`);
+  else {
+    warn(`连不上币安服务器(www.binance.com)${res?.proxy ? `,当前代理 ${res.proxy} 也不通` : ""} —— 登录和下单都会失败`);
+    console.log("    中国大陆需要开代理:打开 Clash / v2rayN 等软件的「系统代理」(面板会自动用上),");
+    console.log("    或者在项目根目录 .env 里加一行 HTTPS_PROXY=http://127.0.0.1:端口(Clash 一般 7890,v2rayN 一般 10809)。");
+  }
+}
+if (await up()) { ok(`面板已经在运行:${URL_}`); if (existsSync(here("node_modules/ethers/package.json"))) netCheck(); open(); process.exit(0); }
 
 // 1. Node 版本
 const major = Number(process.versions.node.split(".")[0]);
@@ -35,6 +50,8 @@ if (!existsSync(here("node_modules/ethers/package.json")) || !existsSync(here("n
   if (!npm(["install", "--no-audit", "--no-fund"])) { bad("npm install 失败,检查网络后重新双击 start.cmd"); process.exit(1); }
 }
 ok("依赖已安装");
+
+netCheck();
 
 // 3. 币安 Agentic Wallet 命令行
 const bawEntry = process.env.APPDATA && join(process.env.APPDATA, "npm", "node_modules", "@binance", "agentic-wallet", "dist", "index.js");

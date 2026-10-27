@@ -4,7 +4,8 @@ import "./env.mjs";   // 先读 .env(私有节点 / TG 等)
 import { spawn, execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { getProxy } from "./proxy.mjs";
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 export const BAW2_ENTRY = here("./baw2/node_modules/@binance/agentic-wallet/dist/index.js");
@@ -37,11 +38,15 @@ if (BAW1_ENTRY && !process.env.BAW1_ENTRY) process.env.BAW1_ENTRY = BAW1_ENTRY;
 // 演示 / 测试用:设了 AGENTBUY_BAW1_DIR 时,账号 1 也用 baw2 那份(凭证存文件、不碰 Windows 凭据管理器),存到指定目录,
 // 保证不会覆盖本机真实的账号 1 登录
 const BAW1_DIR = process.env.AGENTBUY_BAW1_DIR || null;
+// 有代理时 baw 子进程先加载 proxy.mjs(它的网络请求都走代理);每次调用都按当前代理(中途开关系统代理也跟得上)
+const PROXY_URL = pathToFileURL(here("./proxy.mjs")).href;
 export function bawSpawn(acct, cliArgs) {
-  if (acct === "2") return spawn(process.execPath, [BAW2_ENTRY, ...cliArgs], { env: { ...process.env, BINANCE_BAW_DIR: BAW2_DIR } });
-  if (BAW1_DIR) return spawn(process.execPath, [BAW2_ENTRY, ...cliArgs], { env: { ...process.env, BINANCE_BAW_DIR: BAW1_DIR } });
-  if (BAW1_ENTRY) return spawn(process.execPath, [BAW1_ENTRY, ...cliArgs]);
-  return spawn("baw", cliArgs, { shell: true });
+  const pre = getProxy() ? ["--import", PROXY_URL] : [];
+  const env = { ...process.env, ...(getProxy() ? { HTTPS_PROXY: getProxy(), HTTP_PROXY: getProxy() } : {}) };
+  if (acct === "2") return spawn(process.execPath, [...pre, BAW2_ENTRY, ...cliArgs], { env: { ...env, BINANCE_BAW_DIR: BAW2_DIR } });
+  if (BAW1_DIR) return spawn(process.execPath, [...pre, BAW2_ENTRY, ...cliArgs], { env: { ...env, BINANCE_BAW_DIR: BAW1_DIR } });
+  if (BAW1_ENTRY) return spawn(process.execPath, [...pre, BAW1_ENTRY, ...cliArgs], { env });
+  return spawn("baw", cliArgs, { shell: true, env: getProxy() ? { ...env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import ${PROXY_URL}`.trim() } : env });
 }
 
 // --acct both:把当前脚本对两个账号各跑一遍(并行),退出码取最差的

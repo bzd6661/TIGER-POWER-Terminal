@@ -4,6 +4,7 @@
   "type": "module",
   "dependencies": {
     "ethers": "6.13.4",
-    "qrcode": "1.5.4"
+    "qrcode": "1.5.4",
+    "undici": "6.21.3"
   }
 }

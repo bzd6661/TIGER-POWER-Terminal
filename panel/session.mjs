@@ -9,6 +9,7 @@ import { existsSync, writeFileSync, unlinkSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import { bawSpawn, BAW2_ENTRY } from "../accounts.mjs";
+import { getProxy } from "../proxy.mjs";
 
 const PINS = fileURLToPath(new URL("./wallet-pins.json", import.meta.url));
 const readPins = () => { try { return JSON.parse(readFileSync(PINS, "utf8")) || {}; } catch { return {}; } };
@@ -71,6 +72,11 @@ export async function addresses() {
 
 // ---------- 扫码登录 ----------
 const logins = {};   // acct → { state: pending|ok|fail|expired, url, code, expireAt, svg, address, error, ps }
+// 连不上币安服务器(中国大陆等网络常见):告诉用户怎么开代理
+const NET_ERR = /timeout|timed out|ECONN|ENOTFOUND|EAI_AGAIN|NETWORK_ERROR|fetch failed|socket|connect/i;
+const NET_HINT = () => getProxy()
+  ? `\n\n现在走的代理是 ${getProxy()},但还是连不上币安:检查代理软件是否在运行、节点能否打开 binance.com。`
+  : "\n\n连不上币安服务器(www.binance.com)。在中国大陆需要开代理:打开 Clash / v2rayN 等代理软件的「系统代理」(面板 30 秒内自动用上),或者在项目根目录的 .env 里加一行 HTTPS_PROXY=http://127.0.0.1:端口(Clash 一般是 7890,v2rayN 一般是 10809),然后重试。";
 export async function loginStart(acct) {
   if (!slots().includes(acct)) throw new Error(acct === "2" ? "这台电脑没装账号 2 的 baw(agentbuy/baw2 里 npm install)" : "账号不对");
   const s = (await sessions({ force: true }))[acct];
@@ -78,7 +84,10 @@ export async function loginStart(acct) {
   if (!s.installed && acct === "1") throw new Error(`调不起 baw:${s.error ?? ""}。先装:npm i -g @binance/agentic-wallet`);
   logins[acct]?.ps?.kill();
   const r = await bawJson(acct, ["auth", "signin"], 30_000);
-  if (!r.success || !r.data?.qrCodeId) throw new Error("生成登录二维码失败:" + (r.error?.message ?? JSON.stringify(r).slice(0, 200)));
+  if (!r.success || !r.data?.qrCodeId) {
+    const msg = r.error?.message ?? JSON.stringify(r).slice(0, 200);
+    throw new Error("生成登录二维码失败:" + msg + (NET_ERR.test(msg) ? NET_HINT() : ""));
+  }
   const { qrCodeId, expireAt, urlForWeb, pairingCode } = r.data;
   const L = (logins[acct] = {
     state: "pending", url: urlForWeb, code: pairingCode ?? null, expireAt: Number(expireAt) || Date.now() + 5 * 60_000,
