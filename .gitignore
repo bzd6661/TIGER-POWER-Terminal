@@ -39,3 +39,9 @@ panel/copy-log.jsonl
 panel/flapnft.json
 panel/cache.db
 panel/cache.db-*
+
+# 网页小助手(TIGER POWER 网站 ⇄ 本机)的配对 / 限额 / 订单记录
+panel/web-pairs.json
+panel/web-limits.json
+panel/web-orders.jsonl
+panel/web-*.json.tmp

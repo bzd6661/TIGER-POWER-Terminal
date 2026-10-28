@@ -40,11 +40,15 @@ if (BAW1_ENTRY && !process.env.BAW1_ENTRY) process.env.BAW1_ENTRY = BAW1_ENTRY;
 const BAW1_DIR = process.env.AGENTBUY_BAW1_DIR || null;
 // baw 子进程先加载 proxy.mjs:有代理就走代理(每次调用按当前代理,中途开关系统代理也跟得上);没代理时币安域名改用加密 DNS 解析(防 DNS 污染)
 const PROXY_URL = pathToFileURL(here("./proxy.mjs")).href;
+// 用 BINANCE_BAW_DIR 的 baw(账号 2、BAW1_DIR)再加载 nokeytar.mjs:登录只存在自己目录里,不进 Windows 凭据管理器
+//   (baw 在凭据管理器里只有一个固定槽位,账号 2 也用的话会和账号 1 互相覆盖)
+const NOKEYTAR_URL = pathToFileURL(here("./nokeytar.mjs")).href;
 export function bawSpawn(acct, cliArgs) {
   const pre = ["--import", PROXY_URL];
+  const fileOnly = [...pre, "--import", NOKEYTAR_URL];
   const env = { ...process.env, ...(getProxy() ? { HTTPS_PROXY: getProxy(), HTTP_PROXY: getProxy() } : {}) };
-  if (acct === "2") return spawn(process.execPath, [...pre, BAW2_ENTRY, ...cliArgs], { env: { ...env, BINANCE_BAW_DIR: BAW2_DIR } });
-  if (BAW1_DIR) return spawn(process.execPath, [...pre, BAW2_ENTRY, ...cliArgs], { env: { ...env, BINANCE_BAW_DIR: BAW1_DIR } });
+  if (acct === "2") return spawn(process.execPath, [...fileOnly, BAW2_ENTRY, ...cliArgs], { env: { ...env, BINANCE_BAW_DIR: BAW2_DIR } });
+  if (BAW1_DIR) return spawn(process.execPath, [...fileOnly, BAW2_ENTRY, ...cliArgs], { env: { ...env, BINANCE_BAW_DIR: BAW1_DIR } });
   if (BAW1_ENTRY) return spawn(process.execPath, [...pre, BAW1_ENTRY, ...cliArgs], { env });
   return spawn("baw", cliArgs, { shell: true, env: { ...env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import ${PROXY_URL}`.trim() } });
 }

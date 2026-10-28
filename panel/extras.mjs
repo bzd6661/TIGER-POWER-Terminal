@@ -17,9 +17,16 @@ const SFILE = here("./settings.json");
 let S = { maxBuyBnb: 0, autoClaim: false };
 try { S = { ...S, ...JSON.parse(readFileSync(SFILE, "utf8")) }; } catch {}
 export const settings = () => ({ ...S });
+// 校验要改的设置,返回规整过的改动 { maxBuyBnb?: 数字, autoClaim?: 布尔 }(不对就抛错,什么都不改)。
+//   网页改设置要本机批准:批准框照这份写,批准后原样交给 setSettings
+export function cleanSettings(b) {
+  const p = {};
+  if (b.maxBuyBnb !== undefined) { const v = Number(b.maxBuyBnb); if (!(v >= 0 && v <= 100)) throw new Error("单笔上限要在 0–100 BNB 之间(0 = 不限)"); p.maxBuyBnb = v; }
+  if (b.autoClaim !== undefined) p.autoClaim = b.autoClaim === true;
+  return p;
+}
 export function setSettings(b) {
-  if (b.maxBuyBnb !== undefined) { const v = Number(b.maxBuyBnb); if (!(v >= 0 && v <= 100)) throw new Error("单笔上限要在 0–100 BNB 之间(0 = 不限)"); S.maxBuyBnb = v; }
-  if (b.autoClaim !== undefined) S.autoClaim = b.autoClaim === true;
+  Object.assign(S, cleanSettings(b));
   writeFileSync(SFILE, JSON.stringify(S, null, 1));
   return settings();
 }

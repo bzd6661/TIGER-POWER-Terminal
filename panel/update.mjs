@@ -6,13 +6,15 @@
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-export const REPO = "bzd6661/TIGER-POWER-Terminal";
+const root = (p) => fileURLToPath(new URL("../" + p, import.meta.url));
+const localVersion = () => { try { return JSON.parse(readFileSync(root("version.json"), "utf8")); } catch { return { version: "?", build: 0 }; } };
+// 查哪个仓库:本机 version.json 的 repo(本机助手仓库写的是 TIGER-POWER-Helper);没写或格式不对就是完整版
+const repoOf = (r) => (typeof r === "string" && /^[\w.-]+\/[\w.-]+$/.test(r) ? r : "bzd6661/TIGER-POWER-Terminal");
+export const REPO = repoOf(localVersion().repo);
 const SOURCES = [
   `https://raw.githubusercontent.com/${REPO}/main/version.json`,
   `https://cdn.jsdelivr.net/gh/${REPO}@main/version.json`,
 ];
-const root = (p) => fileURLToPath(new URL("../" + p, import.meta.url));
-const localVersion = () => { try { return JSON.parse(readFileSync(root("version.json"), "utf8")); } catch { return { version: "?", build: 0 }; } };
 
 let state = { checkedAt: null, error: null, remote: null };
 async function fetchRemote() {

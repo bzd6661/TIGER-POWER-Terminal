@@ -398,7 +398,7 @@ export function scanLite(data) {
     tokens: data.tokens.map((t) => ({
       ca: t.ca, symbol: t.symbol, name: t.name, platform: t.platform, platformLabel: t.platformLabel, index: t.index, creator: t.creator,
       progress: t.progress, graduated: t.graduated, createdAt: t.createdAt, graduatedAt: t.graduatedAt, lastTradeAt: t.lastTradeAt,
-      mcapUsd: t.mcapUsd, holders: t.holders, gmgn: t.gmgn ? { mcapUsd: t.gmgn.mcapUsd } : undefined,
+      mcapUsd: t.mcapUsd, holders: t.holders, holdersLabel: t.holdersLabel, gmgn: t.gmgn ? { mcapUsd: t.gmgn.mcapUsd } : undefined,
       // 交易页左侧扫链栏的标签用
       quote: t.quote, postTax: t.postTax, postTaxBuy: t.postTaxBuy, postTaxSell: t.postTaxSell, dividend: t.dividend, dividendPct: t.dividendPct, nftGate: t.nftGate ? true : undefined, anti: t.anti || undefined,
     })),

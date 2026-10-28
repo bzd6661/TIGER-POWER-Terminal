@@ -6,6 +6,7 @@
 <title>TIGER POWER · 扫链</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <script src="/i18n.js"></script>
+<script src="/localpop.js"></script>
 <script src="/fmt.js"></script>
 <script src="/icons.js"></script>
 <script src="/update.js" defer></script>
@@ -219,7 +220,8 @@
   /* 三列等分(用户偏好;曾试过中间列收窄) */
   .cols { grid-template-columns:repeat(3, minmax(0,1fr)); }
   .colh { white-space:nowrap; overflow:hidden; } .colh b, .colh .cnt { flex:none; } .colh > .faint { overflow:hidden; text-overflow:ellipsis; min-width:0; }
-  @media (max-width:1100px) { .cols { grid-template-columns:1fr; } }
+  /* 一列时也要 minmax(0,…):写成 1fr 时列宽会被卡片里不换行的内容撑到 1100px 以上,手机上整页变宽 */
+  @media (max-width:1100px) { .cols { grid-template-columns:minmax(0,1fr); } }
   .colh b { display:inline-flex; align-items:center; gap:5px; } .colh b svg { color:var(--mute); }
   /* 卡片:标签一行放不下就截掉(右侧淡出),卡片高度固定 */
   .card { height:105px; overflow:hidden; }
@@ -241,12 +243,38 @@
   .skc .sm { flex:1; display:flex; flex-direction:column; gap:8px; padding-top:2px; }
   @keyframes skshim { 0% { background-position:100% 0; } 100% { background-position:-100% 0; } }
   .skhint { color:var(--faint); font-size:11px; text-align:center; padding:10px 12px; }
+
+  /* ===== 窄屏 / 手机(≤820px):顶栏分几行排,不把页面撑宽 =====
+     页面一比屏幕宽,手机浏览器就按内容宽度排版,居中的弹窗(比如公开版的登录框)会跑到屏幕外面。
+     第一行 Logo + 导航;第二行 实时 / 中英 / 𝕏 / 打赏 / 设置靠右(设置只留齿轮图标,排最后,菜单往左展开不出屏);搜索单独一行占满;快捷买放最后 */
+  @media (max-width:820px) {
+    .top { flex:0 0 auto; height:auto; flex-wrap:wrap; gap:0 8px; padding:4px 10px; }
+    .top > * { margin-top:4px; margin-bottom:4px; }
+    .top::after { content:""; order:3; flex-basis:100%; }   /* 导航后面强制换行 */
+    .top .brand { order:1; }
+    .top .nav { order:2; }
+    .top .nav a { padding:6px 8px; }
+    .top .live { order:4; margin-left:auto; }
+    .top .langbtn { order:5; }
+    .top .xlink { order:6; }
+    .top .tp-hchip { order:7; margin-left:0; }
+    .top .tipbtn { order:8; }
+    .top .setwrap { order:9; }
+    .top .setbtn { display:inline-flex; align-items:center; height:30px; font-size:0; gap:0; padding:0 9px; }
+    .top .search { order:10; flex:1 1 100%; max-width:none; }
+    .top .qbuy { order:11; margin-left:0; flex-wrap:wrap; }
+    /* 筛选面板:右列不被长下拉框 / 说明文字撑出屏幕 */
+    .fgrid { grid-template-columns:110px minmax(0,1fr); }
+    .fgrid .r { flex-wrap:wrap; }
+    .fpanel select { max-width:100%; }
+    .toast { min-width:0; max-width:calc(100vw - 28px); }
+  }
 </style>
 </head>
 <body>
 <div class="top">
   <div class="brand"><svg class="tmlogo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="tmg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F8D33A"/><stop offset="1" stop-color="#E8890C"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#tmg)"/><path d="M5 10.5H14.5M9.75 10.5V23M18.5 23V10.5H23.25A3.5 3.5 0 0 1 23.25 17.5H18.5" fill="none" stroke="#1a1300" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>TIGER POWER</span><small class="tmsub">内盘终端</small></div>
-  <div class="nav"><a href="/">交易</a><a href="/scan" class="on">扫链</a><a href="/track">追踪</a></div>
+  <div class="nav"><a href="/trade">交易</a><a href="/scan" class="on">扫链</a><a href="/track">追踪</a></div>
   <label class="search"><span class="faint" data-ic="search"></span><input id="q" placeholder="搜名称 / 代号 / CA" autocomplete="off" spellcheck="false"></label>
   <div class="qbuy">
     <span class="faint">快捷买</span>
@@ -255,8 +283,8 @@
     <button class="iconbtn" id="sndBtn" title="有新盘时响一声"></button>
   </div>
   <span class="live" id="liveTag"><span class="dot" id="liveDot"></span>实时</span>
-  <div class="setwrap"><button class="setbtn" id="setBtn" title="钱包、转账、设置、授权"><span data-ic="gear"></span>钱包 / 设置</button><div class="setmenu" id="setMenu" hidden><a href="/?go=secWallets" class="setitem"><span class="mi">👛</span><span><b>钱包与持仓</b><small>余额、登录状态、全部持仓和盈亏</small></span></a><a href="/?go=sendBox" class="setitem"><span class="mi">💸</span><span><b>转账</b><small>BNB / 代币转到任意地址</small></span></a><a href="/?go=secSettings" class="setitem"><span class="mi">⚙</span><span><b>设置</b><small>单笔上限、发射后自动转出、自动领取</small></span></a><a href="/?go=secQuotes" class="setitem"><span class="mi">🪙</span><span><b>底池币余额</b><small>内盘卖出后剩下的,一键换回 BNB</small></span></a><a href="/?go=secApprovals" class="setitem"><span class="mi">🔐</span><span><b>授权管理</b><small>查看 / 撤销代币授权</small></span></a></div></div>
-  <a class="tipbtn" href="/?tip=1" title="请作者喝杯咖啡"><span data-ic="coffee"></span>打赏作者</a>
+  <div class="setwrap"><button class="setbtn" id="setBtn" title="钱包、转账、设置、授权"><span data-ic="gear"></span>钱包 / 设置</button><div class="setmenu" id="setMenu" hidden><a href="/trade?go=secWallets" class="setitem"><span class="mi">👛</span><span><b>钱包与持仓</b><small>余额、登录状态、全部持仓和盈亏</small></span></a><a href="/trade?go=sendBox" class="setitem"><span class="mi">💸</span><span><b>转账</b><small>BNB / 代币转到任意地址</small></span></a><a href="/trade?go=secSettings" class="setitem"><span class="mi">⚙</span><span><b>设置</b><small>单笔上限、发射后自动转出、自动领取</small></span></a><a href="/trade?go=secQuotes" class="setitem"><span class="mi">🪙</span><span><b>底池币余额</b><small>内盘卖出后剩下的,一键换回 BNB</small></span></a><a href="/trade?go=secApprovals" class="setitem"><span class="mi">🔐</span><span><b>授权管理</b><small>查看 / 撤销代币授权</small></span></a></div></div>
+  <a class="tipbtn" href="/trade?tip=1" title="请作者喝杯咖啡"><span data-ic="coffee"></span>打赏作者</a>
   <a class="xlink" href="https://x.com/tiger_web3" target="_blank" rel="noopener" title="作者推特 @tiger_web3"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg><span>@tiger_web3</span></a>
 </div>
 <div class="sub">
@@ -290,6 +318,8 @@
 <script>
 const TOKEN_INIT = "__PANEL_TOKEN__";
 let TOKEN = TOKEN_INIT;
+window.tpLocalPop?.init(() => TOKEN, { stream: false });   // 本机弹窗:网站请求的配对码 / 批准框 / 登录请求(网站发的页面里没有这个脚本,这一行什么都不做)。
+//   不另开推送:用页面自己这条(收到的每条事件转给 tpLocalPop.event)。浏览器对同一个地址最多 6 条连接,每页两条的话三个页面一开就占满了
 const $ = (id) => document.getElementById(id);
 let data = null, running = false;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -321,7 +351,7 @@ async function post(path, body) {
 // ca:带上代币地址时这条提示可以点,点了打开这个币(交易页)
 function toast(msg, kind = "", ca = null) {
   const t = document.createElement("div"); t.className = "toast " + kind + (ca ? " click" : ""); t.textContent = msg;
-  if (ca) { t.title = "点击打开 " + ca; t.onclick = () => { t.remove(); location.href = "/?ca=" + ca; }; }
+  if (ca) { t.title = "点击打开 " + ca; t.onclick = () => { t.remove(); location.href = "/trade?ca=" + ca; }; }
   $("toasts").appendChild(t); setTimeout(() => t.remove(), kind === "err" ? 9000 : ca ? 8000 : 5000);
 }
 function log(text, cls) {
@@ -399,6 +429,8 @@ function openFilters() {
   });
   $("fReset").onclick = () => { Object.assign(F, FDEF); saveF(); renderFilterBtn(); p.hidden = true; openFilters(); render(true); };
   $("fClose").onclick = () => (p.hidden = true);
+  // 窄屏顶栏分了几行,高度不固定:面板放到「筛选」按钮下面(宽屏照旧用样式里的 top:96px)
+  p.style.top = matchMedia("(max-width:820px)").matches ? $("fBtn").getBoundingClientRect().bottom + window.scrollY + 8 + "px" : "";
   p.hidden = false;
 }
 $("fBtn").onclick = (e) => { e.stopPropagation(); openFilters(); };
@@ -467,7 +499,7 @@ let seenCa = null;   // 第一次渲染后记住已经见过的币,之后新出�
 function card(t) {
   const mc = mcOf(t), vol = volOf(t), g = t.gmgn;
   const isNew = seenCa && !seenCa.has(t.ca);
-  return `<a class="card ${isBlocked(t) ? "blocked" : ""} ${isNew ? "flash" : ""}" href="/?ca=${esc(t.ca)}" data-open="${esc(t.ca)}">
+  return `<a class="card ${isBlocked(t) ? "blocked" : ""} ${isNew ? "flash" : ""}" href="/trade?ca=${esc(t.ca)}" data-open="${esc(t.ca)}">
     ${ring(t)}
     <div class="mid">
       <div class="r1"><span class="sym">${esc(t.symbol)}</span><span class="nm">${esc(t.name && t.name !== t.symbol ? t.name : "")}</span>
@@ -611,7 +643,7 @@ function bindButtons() {
     navigator.clipboard?.writeText(x.dataset.copy).then(() => toast("CA 已复制:" + x.dataset.copy, "ok"), () => {});
   }));
   // 列表行点击打开(卡片本身是链接,中键 / Ctrl 可新标签打开)
-  document.querySelectorAll("tr[data-open]").forEach((r) => (r.onclick = (e) => { if (!e.target.closest("button,[data-copy],[data-xs]")) location.href = "/?ca=" + r.dataset.open; }));
+  document.querySelectorAll("tr[data-open]").forEach((r) => (r.onclick = (e) => { if (!e.target.closest("button,[data-copy],[data-xs]")) location.href = "/trade?ca=" + r.dataset.open; }));
 }
 function openBlockMenu(anchor, t) {
   closeBlockMenu();
@@ -701,6 +733,7 @@ function startStream() {
   es.onerror = async () => { liveTag(false); if (es.readyState === 2 && (window.TP_PUBLIC || (await refreshToken()))) setTimeout(startStream, window.TP_PUBLIC ? 5000 + Math.random() * 10000 : 1000); };
   es.onmessage = (m) => {
     let ev; try { ev = JSON.parse(m.data); } catch { return; }
+    window.tpLocalPop?.event(ev);   // 网站请求的配对 / 批准 / 登录,和(重新)连上的 hello:交给本机弹窗
     if (ev.type === "lists") return loadLists();
     if (ev.type === "notice") return toast(ev.text, /失败|⚠️/.test(ev.text) ? "err" : "ok");
     if (!data || ev.type === "hello") return;

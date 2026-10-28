@@ -1,5 +1,5 @@
 // 双击 start.cmd 时跑的启动检查(不依赖任何 npm 包,第一次运行也能跑):
-//   Node 版本 → 没装依赖就 npm install → 没装币安钱包命令行(baw)就问要不要装 → 面板没在跑就启动后台守护进程 → 等它起来 → 打开网页。
+//   Node 版本 → 没装依赖就 npm install → 没装币安钱包命令行(baw)就问要不要装 → 面板 / 本机助手没在跑就启动后台守护进程 → 等它起来 → 打开网页。
 //   启动失败时把 panel/panel.log 最后几行打出来。AGENTBUY_NO_OPEN=1 时不打开浏览器(测试用)。
 import { existsSync, readFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
@@ -16,12 +16,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // .env 里可能配了 PANEL_PORT
 try { await import(new URL("../env.mjs", import.meta.url).href); } catch {}
 const PORT = Number(process.env.PANEL_PORT || 4400);
+// 完整版(有交易页 panel/index.html)叫「面板」;导出的本机助手仓库没有交易页,叫「本机助手」(和 server.mjs 的 UI 同一个判断,PANEL_UI 可以强制)
+const HELPER = process.env.PANEL_UI === "helper" || (process.env.PANEL_UI !== "full" && !existsSync(here("panel/index.html")));
+const NAME = HELPER ? "本机助手" : "面板";
 const URL_ = `http://127.0.0.1:${PORT}`;
 const up = () => fetch(URL_ + "/health", { signal: AbortSignal.timeout(1500) }).then((r) => r.ok).catch(() => false);
 const open = () => { if (process.env.AGENTBUY_NO_OPEN === "1") return console.log("  → " + URL_); if (win) spawn("cmd", ["/c", "start", "", URL_], { detached: true, stdio: "ignore" }).unref(); else console.log("  打开 " + URL_); };
 const npm = (args) => spawnSync(win ? "npm.cmd" : "npm", args, { cwd: ROOT, stdio: "inherit", shell: win }).status === 0;
 
-console.log("\nTIGER POWER Terminal · 启动检查\n");
+console.log(`\n${HELPER ? "TIGER POWER 本机助手" : "TIGER POWER Terminal"} · 启动检查\n`);
 // 能不能连上币安(登录、下单都要用;中国大陆等网络需要代理)。用子进程测,这样刚装好的依赖(代理要用)也能用上
 function netCheck() {
   const probe = `import "./env.mjs"; import { getProxy } from "./proxy.mjs";
@@ -33,11 +36,11 @@ console.log(JSON.stringify({ ok, proxy: p, ms: Date.now() - t0 }));`;
   if (res?.ok) ok(`能连上币安${res.proxy ? `(走代理 ${res.proxy})` : ""}`);
   else {
     warn(`连不上币安服务器(www.binance.com)${res?.proxy ? `,当前代理 ${res.proxy} 也不通` : ""} —— 登录和下单都会失败`);
-    console.log("    中国大陆需要开代理:打开 Clash / v2rayN 等软件的「系统代理」(面板会自动用上),");
+    console.log(`    中国大陆需要开代理:打开 Clash / v2rayN 等软件的「系统代理」(${NAME}会自动用上),`);
     console.log("    或者在项目根目录 .env 里加一行 HTTPS_PROXY=http://127.0.0.1:端口(Clash 一般 7890,v2rayN 一般 10809)。");
   }
 }
-if (await up()) { ok(`面板已经在运行:${URL_}`); if (existsSync(here("node_modules/ethers/package.json"))) netCheck(); open(); process.exit(0); }
+if (await up()) { ok(`${NAME}已经在运行:${URL_}`); if (existsSync(here("node_modules/ethers/package.json"))) netCheck(); open(); process.exit(0); }
 
 // 1. Node 版本
 const major = Number(process.versions.node.split(".")[0]);
@@ -77,14 +80,14 @@ if (!existsSync(here("baw2/node_modules/@binance/agentic-wallet/dist/index.js"))
 }
 
 // 4. 启动后台守护进程(没有窗口;代码改了自动重启,崩了自动拉起)
-console.log("  … 启动面板");
+console.log(`  … 启动${NAME}`);
 const env = { ...process.env, PANEL_PORT: String(PORT) };
 if (win) spawn("wscript", [here("panel/daemon.vbs")], { cwd: here("panel"), env, detached: true, stdio: "ignore" }).unref();
 else spawn(process.execPath, [here("panel/daemon.mjs")], { cwd: here("panel"), env, detached: true, stdio: "ignore" }).unref();
 for (let i = 0; i < 25; i++) {
   await sleep(1000);
-  if (await up()) { ok(`面板已启动:${URL_}`); console.log("\n浏览器打开后点「扫码登录」。这个窗口可以关掉,面板会继续在后台运行。\n"); open(); process.exit(0); }
+  if (await up()) { ok(`${NAME}已启动:${URL_}`); console.log(`\n浏览器打开后点「扫码登录」。这个窗口可以关掉,${NAME}会继续在后台运行。\n`); open(); process.exit(0); }
 }
-bad("面板 25 秒内没启动起来。最近的日志(panel/panel.log):\n");
+bad(`${NAME} 25 秒内没启动起来。最近的日志(panel/panel.log):\n`);
 try { console.log(readFileSync(here("panel/panel.log"), "utf8").trim().split(/\r?\n/).slice(-15).join("\n")); } catch { console.log("  (还没有日志)"); }
 process.exit(1);

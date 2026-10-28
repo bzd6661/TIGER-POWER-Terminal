@@ -3,7 +3,8 @@
 //   只提供数据:扫链、代币识别、K 线 / 成交、发币宣言 / 多空对决、涨跌、交易者盈亏、公开追踪动态、实时推送(新盘 / 成交 / 毕业)。
 //   不加载任何钱包代码:没有 baw、没有下单 / 转账 / 授权 / 跟单 / 自动转出,服务器被攻破也动不了任何人的钱。
 //   收藏、屏蔽、追踪名单存在访客自己的浏览器里(panel/public.js),服务器不记录谁在看什么。
-//   环境变量:PORT(默认 8080)、HOST(默认 0.0.0.0)、PUBLIC_ORIGINS(允许的网址,逗号分隔)、TRUST_PROXY=1(在 Cloudflare / 反向代理后面时按转发头取访客 IP)
+//   环境变量:PORT(默认 8080)、HOST(默认 0.0.0.0)、PUBLIC_ORIGINS(允许的网址,逗号分隔)、TRUST_PROXY=1(在 Cloudflare / 反向代理后面时按转发头取访客 IP)、
+//            PUBLIC_HELPER_ORIGINS(页面能连的本机钱包助手地址,写进 CSP connect-src;空格或逗号分隔,默认 http://127.0.0.1:4400 http://localhost:4400)
 process.env.AGENTBUY_PUBLIC = "1";   // 必须在加载其他模块之前:让 session / enrich 进入公开模式(不读钱包、不用个人 GMGN key)
 
 const http = await import("node:http");
@@ -11,6 +12,7 @@ const { readFileSync } = await import("node:fs");
 const { fileURLToPath } = await import("node:url");
 const { gzipSync } = await import("node:zlib");
 const { isIPv6 } = await import("node:net");
+const { createHash } = await import("node:crypto");
 // 兜底:某个请求里漏接的 Promise 报错只记日志,不让整个服务挂掉
 process.on("unhandledRejection", (e) => console.error("[unhandled]", e?.message ?? e));
 const { ethers } = await import("ethers");
@@ -124,16 +126,23 @@ async function cached(key, ms, fn) {
   return p;
 }
 setInterval(() => { const cut = Date.now() - 30_000; for (const [k, e] of micro) if (!e.p && e.at < cut) micro.delete(k); }, 30_000).unref();
-const CSP = "default-src 'self'; img-src 'self'; frame-src https://www.gmgn.cc; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
+// 页面除了本站,只能连用户自己电脑上的钱包助手(public.js 配过对之后把 /api/* 发过去)。只收 http(s)://主机[:端口],别的值丢掉,免得拼坏 CSP
+const HELPER_ORIGINS = String(process.env.PUBLIC_HELPER_ORIGINS || "http://127.0.0.1:4400 http://localhost:4400").split(/[\s,]+/)
+  .filter((s) => /^https?:\/\/([a-z0-9.-]+|\[[0-9a-f:]+\])(:\d{1,5})?$/i.test(s));
+const CSP = `default-src 'self'; img-src 'self'; frame-src https://www.gmgn.cc; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src ${["'self'", ...HELPER_ORIGINS].join(" ")}; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`;
 const SEC = { "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin", "strict-transport-security": "max-age=31536000" };
 // 页面:令牌占位换成 public,并注入公开模式脚本(隐藏钱包 / 下单,本地化收藏和追踪名单)
-const PAGES = { "/": "index.html", "/scan": "scan.html", "/track": "track.html" };
+//   网站首页是扫链页,交易页在 /trade(页面里的链接都用 /trade;本地版 / 和 /trade 都是交易页)
+const PAGES = { "/": "scan.html", "/scan": "scan.html", "/trade": "index.html", "/track": "track.html" };
 const pageCache = new Map();
+// 脚本地址带内容指纹:改版后浏览器和 Cloudflare 边缘缓存(5 分钟)马上换新的
+const ver = (f) => createHash("sha1").update(readFileSync(here("./" + f))).digest("hex").slice(0, 10);
 function page(file) {
   if (pageCache.has(file) && process.env.NODE_ENV === "production") return pageCache.get(file);
   const html = readFileSync(here("./" + file), "utf8").replace("__PANEL_TOKEN__", "public")
-    .replace("<script src=\"/i18n.js\"></script>", "<script src=\"/public.js\"></script>\n<script src=\"/i18n.js\"></script>")
-    .replace("<script src=\"/update.js\" defer></script>\n", "");   // 公开版不用更新提醒(网页本来就是最新的)
+    .replace("<script src=\"/i18n.js\"></script>", `<script src="/public.js?v=${ver("public.js")}"></script>\n<script src="/i18n.js?v=${ver("i18n.js")}"></script>`)
+    .replace(/<script src="\/update\.js" defer><\/script>\r?\n/, "")   // 公开版不用更新提醒(网页本来就是最新的);Windows 检出是 CRLF,换行两种都认
+    .replace(/<script src="\/localpop\.js"><\/script>\r?\n/, "");   // 本机弹窗(配对码 / 批准框)只给本机页面:网站的页面里不放
   pageCache.set(file, html);
   return html;
 }
@@ -152,6 +161,8 @@ const server = http.createServer(async (req, res) => {
     if (path.startsWith("/api/") && !allow(ip, COST[path] ?? 1)) return json(res, 429, { error: "请求太频繁,稍等几秒" });
 
     // ---- 页面和静态文件 ----
+    // 老链接(首页还是交易页时分享出去的 /?ca=…、页面里的 /?go=… / ?tip=1)转到交易页
+    if (req.method === "GET" && path === "/" && ["ca", "go", "tip"].some((k) => url.searchParams.has(k))) { res.writeHead(302, { location: "/trade" + url.search, "cache-control": "no-store" }); return res.end(); }
     if (req.method === "GET" && PAGES[path]) { res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": CSP, "cache-control": "no-cache" }); return res.end(page(PAGES[path])); }
     if (req.method === "GET" && STATIC[path]) { res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" }); return res.end(readFileSync(here("./" + STATIC[path]))); }
     if (req.method === "GET" && (path === "/favicon.svg" || path === "/favicon.ico")) { res.writeHead(200, { "content-type": "image/svg+xml", "cache-control": "public, max-age=86400" }); return res.end(readFileSync(here("./favicon.svg"))); }

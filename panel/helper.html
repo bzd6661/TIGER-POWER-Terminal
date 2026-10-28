@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="zh-CN" data-ui="helper">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TIGER POWER 本机助手</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<script src="/i18n.js"></script>
+<script src="/localpop.js"></script>
+<script src="/update.js" defer></script>
+<style>
+  /* 本机助手页面:只有两个账号的扫码登录、一行状态、已连接的网站(能断开)、去网站的按钮;配对码 / 批准框由 localpop.js 弹出 */
+  :root {
+    --bg:#0a0c0f; --s1:#101318; --s2:#151920; --s3:#1b2029; --line:#1e232c; --line2:#2a313d;
+    --text:#e7eaf0; --mute:#8d96a7; --faint:#5b6372;
+    --up:#16c784; --down:#ea3943; --acc:#f0b90b;
+    --r:10px;
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  html, body { margin:0; min-height:100%; background:var(--bg); color:var(--text); font:13px/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  button { font:inherit; color:inherit; cursor:pointer; }
+  .mono { font-family:"JetBrains Mono", Consolas, "SF Mono", monospace; }
+  .mute { color:var(--mute); } .faint { color:var(--faint); } .up { color:var(--up); } .down { color:var(--down); } .acc { color:var(--acc); }
+
+  .top { height:52px; display:flex; align-items:center; gap:16px; padding:0 16px; border-bottom:1px solid var(--line); background:var(--s1); }
+  .top .langbtn { margin-left:auto; }
+  .brand { display:flex; align-items:center; gap:8px; font-weight:800; font-size:15px; letter-spacing:.5px; white-space:nowrap; }
+  .brand .tmlogo { width:24px; height:24px; flex:none; display:block; filter:drop-shadow(0 1px 4px rgba(240,185,11,.25)); }
+
+  .wrap { max-width:560px; margin:28px auto; padding:0 16px; display:flex; flex-direction:column; gap:14px; }
+  .status { display:flex; align-items:center; gap:6px; padding:10px 14px; background:var(--s1); border:1px solid var(--line); border-radius:var(--r); }
+  .status .ok { color:var(--up); text-shadow:0 0 6px var(--up); } .status b { font-variant-numeric:tabular-nums; }
+  .status.bad { color:var(--down); border-color:rgba(234,57,67,.4); }
+  .accts { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:520px) { .accts { grid-template-columns:1fr; } }
+  .acard { background:var(--s1); border:1px solid var(--line); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px; min-height:120px; }
+  .acard .h { display:flex; align-items:center; justify-content:space-between; gap:8px; } .acard .h b { font-size:15px; }
+  .acard .addr { color:var(--mute); font-size:13px; }
+  .acard .act { margin-top:auto; display:flex; gap:8px; }
+  .acard .note { color:var(--faint); font-size:12px; line-height:1.6; }
+  .acard code { display:block; margin-top:6px; padding:6px 8px; border-radius:7px; background:#000; color:var(--up); font:12px Consolas, monospace; word-break:break-all; }
+  .btn { border:1px solid var(--line2); background:var(--s3); border-radius:9px; padding:7px 14px; font-weight:700; }
+  .btn:hover { border-color:var(--acc); }
+  .btn-acc { background:var(--acc); border-color:var(--acc); color:#1a1300; }
+  .msg { color:var(--down); font-size:12px; text-align:center; }
+  .go { display:block; text-align:center; padding:12px; border-radius:12px; background:var(--acc); color:#1a1300; font-weight:800; font-size:14px; text-decoration:none; }
+  .go:hover { filter:brightness(1.08); }
+  .hint { color:var(--mute); font-size:12px; text-align:center; line-height:1.6; }
+  /* 已连接的网站:每个一行,能断开 */
+  .links { background:var(--s1); border:1px solid var(--line); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
+  .links .lh { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:2px 10px; font-weight:700; }
+  .links .lh .faint { font-weight:400; font-size:12px; }
+  .lrow { display:flex; align-items:center; gap:10px; padding-top:8px; border-top:1px solid var(--line); }
+  .lrow .who { flex:1; min-width:0; } .lrow .who b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lrow .sub { color:var(--mute); font-size:12px; overflow-wrap:anywhere; }
+  .btn-bad { color:var(--down); } .btn-bad:hover { border-color:var(--down); }
+
+  /* 扫码登录弹窗(和交易页同一套) */
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:60; padding:16px; }
+  .mbox { width:100%; max-width:360px; background:var(--s1); border:1px solid var(--line2); border-radius:14px; padding:18px; text-align:center; }
+  .mbox h3 { margin:0 0 4px; font-size:16px; }
+  .qr { width:220px; height:220px; margin:14px auto 10px; background:#fff; border-radius:10px; padding:8px; display:flex; align-items:center; justify-content:center; color:#555; }
+  .qr svg { width:100%; height:100%; display:block; }
+  .pair { font-size:12px; color:var(--mute); } .pair b { font-family:Consolas, monospace; font-size:18px; letter-spacing:3px; color:var(--acc); }
+  .pair .pin { color:var(--faint); margin-top:6px; word-break:break-all; }
+  .mstate { margin:10px 0 4px; font-size:13px; min-height:20px; white-space:pre-line; line-height:1.55; }
+  .mstate .links { margin-top:8px; display:flex; gap:8px; justify-content:center; } .mstate a { text-decoration:none; }
+  .mrow { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+  .mrow a, .mrow button { display:block; text-align:center; text-decoration:none; border-radius:9px; padding:9px 0; border:1px solid var(--line2); background:var(--s3); color:var(--text); font-size:13px; }
+  .mrow .btn-acc { background:var(--acc); border-color:var(--acc); color:#1a1300; font-weight:700; }
+  #askModal { z-index:70; }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand"><svg class="tmlogo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="tmg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F8D33A"/><stop offset="1" stop-color="#E8890C"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#tmg)"/><path d="M5 10.5H14.5M9.75 10.5V23M18.5 23V10.5H23.25A3.5 3.5 0 0 1 23.25 17.5H18.5" fill="none" stroke="#1a1300" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>TIGER POWER 本机助手</span></div>
+</div>
+<main class="wrap">
+  <div class="status" id="statusOk"><span class="ok">●</span><span>运行中</span><span class="faint">·</span><span>已连接网页</span><b id="pairN">0</b><span>个</span></div>
+  <div class="status bad" id="statusBad" hidden><span>●</span><span>本机助手没有响应:可能已经关掉了,重新双击 start.cmd</span></div>
+  <div class="accts" id="accts"><div class="acard"><span class="faint">读取中…</span></div><div class="acard"><span class="faint">读取中…</span></div></div>
+  <div class="links" id="links" hidden>
+    <div class="lh"><span>已连接的网站</span><span class="faint">断开后,那个浏览器要重新配对才能用本机助手</span></div>
+    <div id="linkList"></div>
+  </div>
+  <div class="msg" id="msg" hidden></div>
+  <a class="go" href="https://tigerpower.online" target="_blank" rel="noopener">打开 tigerpower.online →</a>
+  <div class="hint">网站上转账、改设置这类操作会在这里弹出批准框,这个页面开着才能批准</div>
+</main>
+<div class="modal" id="loginModal" hidden>
+  <div class="mbox">
+    <h3 id="lmTitle"></h3>
+    <div class="faint" style="font-size:12px">用 Binance App 扫码,在 App 里确认登录</div>
+    <div class="qr" id="lmQr"></div>
+    <div class="pair" id="lmPair"></div>
+    <div class="mstate" id="lmState"></div>
+    <div class="mrow"><a id="lmOpen" href="#" target="_blank" rel="noopener">手机上打开链接</a><button id="lmClose">关闭</button></div>
+  </div>
+</div>
+<div class="modal" id="askModal" hidden>
+  <div class="mbox">
+    <h3 id="askT"></h3>
+    <div class="mstate mute" id="askB"></div>
+    <div class="mrow"><button id="askNo">取消</button><button id="askYes" class="btn-acc"></button></div>
+  </div>
+</div>
+
+<script>
+const TOKEN_INIT = "__PANEL_TOKEN__";
+let TOKEN = TOKEN_INIT;
+window.tpLocalPop?.init(() => TOKEN);   // 本机弹窗:网站请求的配对码 / 批准框 / 登录请求
+const $ = (id) => document.getElementById(id);
+const short = (a) => (a ? a.slice(0, 6) + "…" + a.slice(-4) : "");
+// 建元素;子节点是字符串就是文字节点(每段中文单独一个节点,英文界面才能整句对上词典)。服务器 / 网页给的文字一律走这里,不拼 HTML
+function h(tag, cls, ...kids) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  for (const k of kids) if (k !== null && k !== undefined && k !== false) e.append(k);
+  return e;
+}
+function link(text, cls, fn) { const a = h("a", cls, text); a.href = "#"; a.onclick = (e) => { e.preventDefault(); fn(); }; return a; }
+// 令牌不对(服务器换过令牌)时:重新拿页面里的令牌再试一次。被拒的请求服务器什么都没做,重试安全
+async function refreshToken() {
+  const html = await fetch(location.pathname, { cache: "no-store" }).then((r) => r.text());
+  const m = html.match(/const TOKEN_INIT = "([0-9a-f]{48})"/);
+  if (m) TOKEN = m[1];
+  return !!m;
+}
+// 本机接口:返回 JSON,出错抛服务器给的错误;连不上服务器时 fetch 抛 TypeError(状态行据此显示「没有响应」)
+async function post(path, data = {}) {
+  const send = () => fetch(path, { method: "POST", headers: { "content-type": "application/json", "x-panel-token": TOKEN }, body: JSON.stringify(data) });
+  let r = await send();
+  if (r.status === 403 && /令牌/.test(await r.clone().text()) && (await refreshToken())) r = await send();
+  const d = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(d?.error || "HTTP " + r.status);
+  return d;
+}
+let msgT = null;
+function showMsg(text) { clearTimeout(msgT); $("msg").textContent = text; $("msg").hidden = false; msgT = setTimeout(() => ($("msg").hidden = true), 9000); }
+function setAlive(ok) { $("statusOk").hidden = !ok; $("statusBad").hidden = ok; }
+
+// ---------- 状态行(已连接网页几个)+ 已连接的网站列表(每个都能断开) ----------
+async function loadLink() {
+  try { const st = await post("/api/link/state"); renderPairs(Array.isArray(st?.pairs) ? st.pairs : []); setAlive(true); }
+  catch (e) { if (e instanceof TypeError) setAlive(false); }
+}
+window.tpLinkChanged = loadLink;   // 配对完成 / 作废(localpop.js 调)
+// pairs = /api/link/state 的 pairs:[{ id, origin, label, createdAt, lastUsed }]。浏览器名、来源是网页给的:文字节点,不翻译
+function renderPairs(pairs) {
+  $("pairN").textContent = String(pairs.length);
+  $("links").hidden = !pairs.length;
+  $("linkList").replaceChildren(...pairs.map((p) => {
+    const label = h("b", null, String(p.label ?? "")); label.dataset.notr = "1"; label.title = String(p.label ?? "");
+    const origin = h("span", "mono", String(p.origin ?? "")); origin.dataset.notr = "1";
+    const when = h("span", null, p.lastUsed ? new Date(p.lastUsed).toLocaleString() : "—"); when.dataset.notr = "1";
+    const off = h("button", "btn btn-bad", "断开"); off.onclick = () => doRevoke(p, off);
+    return h("div", "lrow", h("div", "who", label, h("div", "sub", origin, " · ", h("span", null, "上次使用"), " ", when)), off);
+  }));
+}
+// 断开:那个浏览器的令牌马上作废,它还在等的批准也一起作废;要再用得在网站上重新配对
+async function doRevoke(p, btn) {
+  if (!(await ask(["断开这个网站的连接?"], "断开后,这个浏览器要在网站上重新输入配对码才能用本机助手。", "断开"))) return;
+  btn.disabled = true;
+  try { await post("/api/link/revoke", { id: p.id }); } catch (e) { showMsg(e.message); }
+  loadLink();
+}
+
+// ---------- 两个账号 ----------
+let wallets = null;
+async function loadWallets(force = false) {
+  try { wallets = await post("/api/wallets", { force }); setAlive(true); renderAccts(); }
+  catch (e) { if (e instanceof TypeError) setAlive(false); else showMsg(e.message); }
+}
+function renderAccts() {
+  const ss = Object.fromEntries((wallets?.sessions ?? []).map((s) => [String(s.acct), s]));
+  $("accts").replaceChildren(...["1", "2"].map((acct) => acctCard(acct, ss[acct], (wallets?.accounts ?? []).find((a) => String(a.acct) === acct))));
+}
+// s = /api/wallets 的 sessions 里这个号(账号 2 没装 baw2 时没有);a = accounts 里这个号(登录了才有,带地址)
+function acctCard(acct, s, a) {
+  const head = (pill) => h("div", "h", h("b", null, "账号", " " + acct), pill);
+  if (!s || s.installed === false) {
+    if (acct === "2") return h("div", "acard", head(null), h("div", "note", "账号 2 没装(见说明)"));
+    return h("div", "acard", head(null), h("div", "note", h("span", null, "没调起币安钱包命令行(baw),先装好再刷新这个页面:"), h("code", null, "npm i -g @binance/agentic-wallet")));
+  }
+  if (s.connected) {
+    const out = h("button", "btn", "退出"); out.onclick = () => doLogout(acct);
+    const addr = h("div", "addr mono", short(a?.address ?? "")); if (a?.address) addr.title = a.address;
+    return h("div", "acard", head(h("span", "up", "● ", "在线")), addr, h("div", "act", out));
+  }
+  const login = h("button", "btn btn-acc", "扫码登录"); login.onclick = () => openLogin(acct);
+  return h("div", "acard", head(h("span", "faint", "未登录")), h("div", "act", login));
+}
+// 确认框:title 是几段文字(每段一个节点),yes 是确认按钮上的字
+function ask(title, body, yes) {
+  return new Promise((done) => {
+    $("askT").replaceChildren(...title); $("askB").textContent = body; $("askYes").textContent = yes; $("askModal").hidden = false;
+    const end = (v) => { $("askModal").hidden = true; done(v); };
+    $("askYes").onclick = () => end(true); $("askNo").onclick = () => end(false);
+  });
+}
+async function doLogout(acct) {
+  if (!(await ask(["退出账号", " " + acct + "?"], "退出后这台电脑上要重新扫码才能用这个号交易。", "退出"))) return;
+  try { await post("/api/login/logout", { acct }); } catch (e) { showMsg(e.message); }
+  loadWallets(true);
+}
+
+// ---------- 扫码登录(和交易页的 openLogin / showLogin 一样:扫错账号 → 重新扫码,或解除锁定换钱包;本机请求不用批准) ----------
+let loginPoll = null, loginSeq = 0;
+async function openLogin(acct) {
+  acct = String(acct ?? "");
+  if (!/^[12]$/.test(acct)) return;
+  const seq = ++loginSeq;
+  clearTimeout(loginPoll);
+  $("loginModal").hidden = false; $("lmTitle").replaceChildren("登录账号", " " + acct);
+  $("lmQr").replaceChildren("生成中…"); delete $("lmQr").dataset.url; $("lmPair").replaceChildren(); $("lmState").replaceChildren(); $("lmOpen").removeAttribute("href");
+  try { const d = await post("/api/login/start", { acct }); if (seq === loginSeq) showLogin(acct, d, seq); }
+  catch (e) { if (seq === loginSeq) { $("lmQr").replaceChildren("✗"); $("lmState").replaceChildren(h("span", "down", e.message)); } }
+}
+function showLogin(acct, d, seq) {
+  if (d.svg && $("lmQr").dataset.url !== d.url) { $("lmQr").innerHTML = d.svg; $("lmQr").dataset.url = d.url; }   // svg 是本机服务器用 qrcode 生成的
+  if (d.url) $("lmOpen").href = d.url;
+  $("lmPair").replaceChildren(...(d.code ? [h("span", null, "配对码"), " ", h("b", null, d.code)] : []),
+    ...(d.pin ? [h("div", "pin", h("span", null, "这个槽位锁定的钱包:"), h("span", "mono", d.pin), h("br"), h("span", null, "请用这个钱包所在的币安账号扫码,扫错会自动退出"))] : []));
+  clearTimeout(loginPoll);
+  const st = $("lmState");
+  if (d.state === "wrong") {
+    st.replaceChildren(h("span", "down", "✗ ", d.error ?? "扫错账号了"), h("div", "links", link("重新扫码", "acc", () => openLogin(acct)), link("解除锁定(要换钱包)", "faint", () => doUnpin(acct))));
+    return;
+  }
+  if (d.state === "pending") {
+    const left = Math.max(0, Math.round((d.expireAt - Date.now()) / 1000));
+    st.replaceChildren(h("span", "mute", "等你扫码… 二维码还剩", " " + Math.floor(left / 60) + ":" + String(left % 60).padStart(2, "0")));
+    loginPoll = setTimeout(async () => {
+      if ($("loginModal").hidden || seq !== loginSeq) return;
+      let r = null;
+      try { r = await post("/api/login/status", { acct }); } catch {}
+      if (!$("loginModal").hidden && seq === loginSeq) showLogin(acct, r ?? d, seq);
+    }, 2000);
+  } else if (d.state === "ok") {
+    st.replaceChildren(h("span", "up", "✓ ", "登录成功", " " + short(d.address ?? "")));
+    setTimeout(() => { if (seq === loginSeq) $("loginModal").hidden = true; }, 1200);
+    loadWallets(true);
+  } else {
+    st.replaceChildren(h("span", "down", d.state === "expired" ? "二维码过期了" : "登录没成功", d.state !== "expired" && d.error ? ":" + d.error : ""), " ", link("重新生成", "acc", () => openLogin(acct)));
+  }
+}
+async function doUnpin(acct) {
+  if (!(await ask(["解除这个账号的地址锁定?"], "解除后,下一次扫码登录的钱包会成为这个账号的新锁定地址。只有确实要换成另一个币安钱包时才这么做。", "解除锁定"))) return;
+  try { await post("/api/login/unpin", { acct }); openLogin(acct); }
+  catch (e) { $("lmState").replaceChildren(h("span", "down", "解除失败", ":" + e.message)); }
+}
+$("lmClose").onclick = () => { $("loginModal").hidden = true; clearTimeout(loginPoll); loginSeq++; };
+window.tpLoginRequested = openLogin;   // 网站请求登录(localpop.js 收到 loginreq 时调)
+
+loadWallets(); loadLink();
+setInterval(() => { loadWallets(); loadLink(); }, 15_000);
+</script>
+</body>
+</html>

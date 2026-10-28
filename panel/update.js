@@ -32,9 +32,11 @@
     pill.querySelector(".later").onclick = () => pill.remove();
     pill.querySelector(".go").onclick = () => {
       const en = window.UI_LANG === "en";
+      // 本机助手页面(helper.html 的 <html data-ui="helper">)叫「本机助手页面」,完整版的三个页面叫「面板窗口」
+      const helper = document.documentElement.dataset.ui === "helper";
       const steps = u.git
-        ? (en ? `<b>You installed with git</b>: open a terminal and run<code>cd /d "${esc(u.dir)}"\ngit pull</code>then close the panel window and double-click <b>start.cmd</b> again (the startup check installs new dependencies).`
-              : `<b>你是用 git 下载的</b>:在项目文件夹打开命令行,运行<code>cd /d "${esc(u.dir)}"\ngit pull</code>然后关掉面板窗口,重新双击 <b>start.cmd</b>(启动检查会自动装新依赖)。`)
+        ? (en ? `<b>You installed with git</b>: open a terminal and run<code>cd /d "${esc(u.dir)}"\ngit pull</code>then close the ${helper ? "local helper page" : "panel window"} and double-click <b>start.cmd</b> again (the startup check installs new dependencies).`
+              : `<b>你是用 git 下载的</b>:在项目文件夹打开命令行,运行<code>cd /d "${esc(u.dir)}"\ngit pull</code>然后关掉${helper ? "本机助手页面" : "面板窗口"},重新双击 <b>start.cmd</b>(启动检查会自动装新依赖)。`)
         : (en ? `<b>You downloaded a zip</b>: download the latest zip and extract it <b>over</b> your old folder (<code>${esc(u.dir)}</code>). Your .env, logins and the data files in panel are kept (they are not in the zip). Then double-click <b>start.cmd</b> again.`
               : `<b>你是下载压缩包的</b>:下载最新压缩包,解压后<b>覆盖</b>到原来的文件夹(<code>${esc(u.dir)}</code>)。<br>覆盖不会动你的 .env、登录信息和 panel 里的数据文件(它们不在压缩包里)。然后重新双击 <b>start.cmd</b>。`);
       const m = document.createElement("div");

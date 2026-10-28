@@ -1,5 +1,5 @@
 @echo off
-rem Double-click to open the panel. All checks live in setup.mjs (Node prints Chinese reliably; cmd does not).
+rem Double-click to start (the root start.cmd calls this). All checks live in setup.mjs (Node prints Chinese reliably; cmd does not).
 cd /d "%~dp0.."
 where node >nul 2>nul || goto nonode
 node "%~dp0setup.mjs"
