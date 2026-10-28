@@ -8,6 +8,8 @@
 //   K 线点 { t, p(美元单价), v(美元成交额) },由前端按周期聚合;另给 supply 让前端换算市值。
 import { ethers } from "ethers";
 import { logRpc, HAS_PRIVATE, PUBLIC_WINDOW } from "./logrpc.mjs";
+import { gangJson } from "./upstream.mjs";
+import { dataFile } from "./datadir.mjs";
 const c_partial = new Set();   // 只查到最近一段的 four 币(没配自己的节点)
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -28,7 +30,7 @@ const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 // ---------- four:链上 TradeExecuted,从创建区块起;每个币记住拉到哪个块,下次只拉新的 ----------
 const fourCache = new Map();   // ca → { last, rows, blockTs }
 function createdBlockOf(ca) {
-  try { return JSON.parse(readFileSync(here("./scan-cache.json"), "utf8")).four.tokens[ca]?.createdBlock ?? null; } catch { return null; }
+  try { return JSON.parse(readFileSync(dataFile("scan-cache.json"), "utf8")).four.tokens[ca]?.createdBlock ?? null; } catch { return null; }
 }
 // 同一个币同时只拉一次(K 线和成交列表会同时来要),否则两次增量会把同一段日志加两遍
 const fourBusy = new Map();
@@ -83,6 +85,8 @@ async function fourTradesOnce(ca) {
 // ---------- Gang:gang.fun 成交接口翻页 ----------
 // 增量:已经拉过的成交记在内存里,之后从最新一页往回翻,翻到见过的成交就停(不用每次把几百笔全拉一遍)
 const gangSeen = new Map();   // ca → 成交数组(新 → 旧)
+// 内存里留多少个币的成交:公开版看的人多、币也多,留多一点,免得来回重拉
+const CAP = process.env.AGENTBUY_PUBLIC === "1" ? 150 : 30;
 const gKey = (t) => `${t.tx}:${t.trader}:${t.side}:${t.tokens}`;
 function gangRow(t, v2) {
   const base = Number(v2 ? t.quoteIn : t.bnb), fee = v2 ? Number(t.taxPlat || 0) + Number(t.taxDiv || 0) : Number(t.fee || 0);
@@ -95,7 +99,7 @@ async function gangTrades(ca, v2, max = 20000) {
   let hitOld = false;
   // 第一次拉:接口每页最多 200 笔、每次要 2~5 秒,按 4 页一批并发拉(到某一页不满 200 笔为止)
   if (!known) {
-    const page = (off) => fetch(`https://gang.fun/api/${v2 === "v3" ? "v3/tokens" : v2 ? "stocks/tokens" : "tokens"}/${ca}/trades?limit=200&offset=${off}&sort=ts_desc`, { signal: AbortSignal.timeout(20000) }).then((r) => r.json());
+    const page = (off) => gangJson(`https://gang.fun/api/${v2 === "v3" ? "v3/tokens" : v2 ? "stocks/tokens" : "tokens"}/${ca}/trades?limit=200&offset=${off}&sort=ts_desc`, 20000);
     const pages = [];
     for (let off = 0; off < max; off += 800) {
       const batch = await Promise.all([0, 200, 400, 600].map((d) => page(off + d)));
@@ -106,11 +110,11 @@ async function gangTrades(ca, v2, max = 20000) {
     const seen = new Set(), all = out.filter((t) => { const k = gKey(t); if (seen.has(k)) return false; seen.add(k); return true; });
     gangSeen.set(ca, all);
     saveTrades("gang", ca, all, all.length < max ? 1 : 0, gKey);   // 1 = 从开盘起拉全了
-    if (gangSeen.size > 40) gangSeen.delete(gangSeen.keys().next().value);
+    if (gangSeen.size > CAP) gangSeen.delete(gangSeen.keys().next().value);
     return all;
   }
   for (let off = 0; off < max && !hitOld;) {
-    const j = await fetch(`https://gang.fun/api/${v2 === "v3" ? "v3/tokens" : v2 ? "stocks/tokens" : "tokens"}/${ca}/trades?limit=200&offset=${off}&sort=ts_desc`, { signal: AbortSignal.timeout(15000) }).then((r) => r.json());
+    const j = await gangJson(`https://gang.fun/api/${v2 === "v3" ? "v3/tokens" : v2 ? "stocks/tokens" : "tokens"}/${ca}/trades?limit=200&offset=${off}&sort=ts_desc`);
     // 金额口径(用链上 Transfer / 发射台事件核对过):接口的 quoteIn(V2)/ bnb(V1)不含平台费 ——
     //   买入:交易者实际付出 = 金额 + 平台费(V2 还有分红税);卖出:金额就是实际到手。
     for (const t of j.items ?? []) out.push(gangRow(t, v2));
@@ -121,7 +125,7 @@ async function gangTrades(ca, v2, max = 20000) {
   let all = out;
   if (hitOld) { const fresh = out.filter((t) => !known.has(gKey(t))); all = fresh.concat(old); saveTrades("gang", ca, fresh, 1, gKey); }
   gangSeen.set(ca, all);
-  if (gangSeen.size > 40) gangSeen.delete(gangSeen.keys().next().value);
+  if (gangSeen.size > CAP) gangSeen.delete(gangSeen.keys().next().value);
   return all;
 }
 
@@ -144,9 +148,12 @@ const dexCache = new Map();
 const oldBars = new Map();   // pool → { bars, at }
 // GeckoTerminal 免费接口约 30 次 / 分钟(收藏栏每个外盘币都会定时拉 K 线,很容易超):
 //   所有请求排成一队,两次之间至少隔 2.2 秒;碰到 429 就停 2 分钟(期间返回 null,调用方沿用旧数据)
-let geckoLimitedUntil = 0, geckoQueue = Promise.resolve(), geckoLast = 0;
+let geckoLimitedUntil = 0, geckoQueue = Promise.resolve(), geckoLast = 0, geckoDepth = 0;
 function gecko(pool, ca, tf, agg, before) {
   const url = `https://api.geckoterminal.com/api/v2/networks/bsc/pools/${pool}/ohlcv/${tf}?aggregate=${agg}&limit=1000&currency=usd&token=${ca}${before ? "&before_timestamp=" + before : ""}`;
+  // 队伍里已经排了 20 个(约 45 秒的量):这次不排了,调用方沿用旧 K 线(不然一个人刷很多币就能让所有人的外盘 K 线等好几分钟)
+  if (geckoDepth >= 20) return Promise.resolve(null);
+  geckoDepth++;
   const job = geckoQueue.then(async () => {
     if (Date.now() < geckoLimitedUntil) return null;
     const wait = geckoLast + 2200 - Date.now();
@@ -157,7 +164,7 @@ function gecko(pool, ca, tf, agg, before) {
     if (!r.ok) return null;
     const g = await r.json();
     return (g.data?.attributes?.ohlcv_list ?? []).map(([t, o, h, l, c, vol]) => ({ t, o, h, l, c, v: vol }));
-  }).catch(() => null);
+  }).catch(() => null).finally(() => geckoDepth--);
   geckoQueue = job;
   return job;
 }
@@ -234,6 +241,15 @@ export async function quoteUsdOf(q, fallback) {
 // ---------- 汇总 ----------
 const allCache = new Map();   // ca → { at, v }
 const histBusy = new Map();
+// 同时最多拉几个币的成交(公开版 6 个、本地 50 个):很多人同时点开不同的币时排队,不把外部接口一下打爆
+const HIST_MAX = process.env.AGENTBUY_PUBLIC === "1" ? 6 : 50;
+let histActive = 0;
+const histWait = [];
+async function histSlot(fn) {
+  if (histActive >= HIST_MAX) await new Promise((r) => histWait.push(r));
+  histActive++;
+  try { return await fn(); } finally { histActive--; histWait.shift()?.(); }
+}
 // 有新成交推过来时,让这个币的缓存失效(下次请求就会带上新成交)
 // 有新成交 / 自己下完单时标成「过期」:下次请求等增量刷新完再返回(只拉最新一页,很快)
 export function invalidate(ca) { const h = allCache.get(String(ca).toLowerCase()); if (h) h.at = 0; }
@@ -241,12 +257,13 @@ export function history(d, { wait = false } = {}) {
   const ca = d.ca.toLowerCase();
   const hit = allCache.get(ca);
   if (hit && Date.now() - hit.at < 8_000) return Promise.resolve(hit.v);
-  if (!histBusy.has(ca)) histBusy.set(ca, historyOnce(d).finally(() => histBusy.delete(ca)));
+  if (!histBusy.has(ca)) histBusy.set(ca, histSlot(() => historyOnce(d)).finally(() => histBusy.delete(ca)));
   // 5 分钟内的旧结果先用着(后台已经在刷新);更旧的、或者要求等最新的,就等这一轮
   // 5 分钟内的旧结果先用着(后台已经在刷新)。但标成「过期」(有新成交 / 刚下完单)的要等这一轮刷新:
   //   增量刷新只拉最新一页,一般 1 秒内,换来的是自己刚下的单马上能在成交列表里看到
   if (hit && hit.at !== 0 && !wait && Date.now() - hit.at < 300_000) { histBusy.get(ca).catch(() => {}); return Promise.resolve(hit.v); }
-  return histBusy.get(ca);
+  // 这一轮失败了(接口限流等)就先用旧数据,别让页面报错
+  return histBusy.get(ca).catch((e) => { if (hit) return hit.v; throw e; });
 }
 async function historyOnce(d) {
   const ca = d.ca.toLowerCase();
@@ -269,7 +286,7 @@ async function historyOnce(d) {
     dex,
   };
   allCache.set(ca, { at: Date.now(), v });
-  if (allCache.size > 30) allCache.delete(allCache.keys().next().value);
+  if (allCache.size > CAP) allCache.delete(allCache.keys().next().value);
   return v;
 }
 

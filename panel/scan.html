@@ -698,7 +698,7 @@ function startStream() {
   try { es?.close(); } catch {}
   es = new EventSource("/api/stream?t=" + TOKEN);
   es.onopen = () => liveTag(true);
-  es.onerror = async () => { liveTag(false); if (es.readyState === 2 && (await refreshToken())) setTimeout(startStream, 1000); };
+  es.onerror = async () => { liveTag(false); if (es.readyState === 2 && (window.TP_PUBLIC || (await refreshToken()))) setTimeout(startStream, window.TP_PUBLIC ? 5000 + Math.random() * 10000 : 1000); };
   es.onmessage = (m) => {
     let ev; try { ev = JSON.parse(m.data); } catch { return; }
     if (ev.type === "lists") return loadLists();

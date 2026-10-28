@@ -156,6 +156,10 @@ four 脚本没有 `--acct`,账号 2 用 `four2.cmd fourbuy <CA> <BNB>` / `four2.
 - **你的设置和数据**:`.env`、`panel/autotransfer*.json`、`panel/lists.json`(收藏 / 屏蔽)、`panel/settings.json`、`panel/track.json`、`panel/track-feed.jsonl`(钱包追踪)、`gang/positions.json`、`gang/v3-state.json`、`auto-state.json`
 - **缓存和日志**:`panel/.panel-token`、`panel/img-cache/`、`panel/scan-cache.json`、`panel/latency.jsonl`、`.liq-cache.json`、`.quote-routes.json`、`gang/cli-latest/`、`*.log`、`node_modules/`
 
+## 五、公开网页版(只看数据)
+
+[tigerpower.online](https://tigerpower.online) 是部署在服务器上的只读版:扫链、代币页(K 线 / 成交 / 多空对决)、追踪都能用,不能下单;服务器上没有任何钱包。自己部署见 [deploy/README.md](deploy/README.md)。
+
 ---
 
 本工具只是帮你调用自己钱包的下单接口,不构成任何投资建议。内盘币风险极高,自己判断。

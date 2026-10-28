@@ -10,8 +10,9 @@ import { ethers } from "ethers";
 import { provider, dexUsd, divOf } from "./detect.mjs";
 import { gatedList, portalState, metaOf, markDex, FLAP_PORTAL, portalStateCall, parsePortalState } from "./flapnft.mjs";
 import { kickGmgn, gmgnInfo, gmgnStatus } from "./enrich.mjs";
+import { dataFile } from "./datadir.mjs";
 
-const CACHE = fileURLToPath(new URL("./scan-cache.json", import.meta.url));
+const CACHE = dataFile("scan-cache.json");
 const CORE = "0xebe7b6C1089D9F72aD07f34E36d898e44E5e27f3";
 const FOUR_PRESET = 1778027615735n;
 const FOUR_FROM = 129364687;
@@ -283,7 +284,7 @@ function dexUpdate(cas) {
 // ---------- 汇总 ----------
 // 有上一次的结果就直接返回(不让页面等十几秒),超过 15 秒在后台重扫;
 // 结果另存一份到 scan-last.json,面板重启后第一次打开也不用等
-const LAST_FILE = fileURLToPath(new URL("./scan-last.json", import.meta.url));
+const LAST_FILE = dataFile("scan-last.json");
 let last = null;
 try { const d = JSON.parse(readFileSync(LAST_FILE, "utf8")); if (d?.tokens?.length) last = { at: 0, data: d }; } catch {}
 let fresh = null, savedAt = 0;

@@ -66,6 +66,7 @@ export async function sessions({ force = false } = {}) {
 }
 // 已登录账号的地址 { "1": "0x…", "2": "0x…" }
 export async function addresses() {
+  if (process.env.AGENTBUY_PUBLIC === "1") return {};   // 公开服务器:没有任何钱包
   const s = await sessions();
   return Object.fromEntries(Object.values(s).filter((x) => x.connected && x.address).map((x) => [x.acct, x.address]));
 }

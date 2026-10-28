@@ -55,7 +55,7 @@ async function erc20Info(ca) {
     hit ? hit.decimals : retry(() => one(ca, "decimals")).catch(() => 18),
     retry(() => one(ca, "totalSupply")).catch(() => 0n),
   ]);
-  if (symbol) symCache.set(k, { symbol, name, decimals });
+  if (symbol) { symCache.set(k, { symbol, name, decimals }); if (symCache.size > 20000) symCache.delete(symCache.keys().next().value); }
   return { symbol: symbol ?? "?", name, decimals: Number(decimals), supply };
 }
 
@@ -128,6 +128,18 @@ export async function dexUsd(addr) {
   return v;
 }
 
+// 发币人填的推特 / 官网 / TG(不能信):只收 http(s) 链接;推特只认 x.com / twitter.com(或纯用户名),TG 只认 t.me
+export function socialsOf(o) {
+  const url = (v) => { try { const u = new URL(String(v ?? "").trim()); return /^https?:$/.test(u.protocol) && !u.username && !u.password ? u : null; } catch { return null; } };
+  const out = {};
+  const tw = String(o?.twitter ?? "").trim();
+  if (/^@?[A-Za-z0-9_]{1,15}$/.test(tw)) out.twitter = "https://x.com/" + tw.replace(/^@/, "");
+  else { const u = url(tw); if (u && /^(www\.|mobile\.)?(x|twitter)\.com$/i.test(u.hostname)) out.twitter = u.href; }
+  const w = url(o?.website); if (w) out.website = w.href;
+  const t = url(o?.telegram); if (t && /^(www\.)?(t\.me|telegram\.me)$/i.test(t.hostname)) out.telegram = t.href;
+  return Object.keys(out).length ? out : null;
+}
+
 // Gang 分红:taxed=true 的税币,1% 买卖税的一半按持仓分给持有 ≥1 万枚的地址(用底池币发,经分红金库);taxed=false 毕业后 0 税、不分红
 export function divOf(d) {
   if (!d) return null;
@@ -144,16 +156,17 @@ async function detectGang(ca, W) {
     platform: v2 ? "gangv2" : "gangv1", platformLabel: v2 ? `Gang V2 · 底池 ${d.quoteSymbol}` : "Gang 第一代 · 底池 BNB",
     stage: d.graduated ? "outer" : "inner", quote: v2 ? d.quoteSymbol : "BNB", progress: d.progressPct, pair: d.pair,
     holders: d.holders, lastTradeAt: d.lastTradeAt, taxed: d.taxed, dividend: d.taxed === undefined ? null : !!d.taxed, div: divOf(d.dividends), onePctTokens: 10_000_000, holdings: {},
-    supply: 1e9, priceQuote: Number(v2 ? d.priceQuote : d.priceBnb) * (v2 && String(d.quoteAddress || "").toLowerCase() === "0x21caef8a43163eea865baee23b9c2e327696a3bf" ? 1e12 : 1),   // gang.fun 按 18 位给 XAUt(6 位)的价格,小 10^12 倍 quoteUsd: Number(d.quoteUsd) || null, mcUsd: Number(d.fdvUsd) || null,
+    supply: 1e9, priceQuote: Number(v2 ? d.priceQuote : d.priceBnb) * (v2 && String(d.quoteAddress || "").toLowerCase() === "0x21caef8a43163eea865baee23b9c2e327696a3bf" ? 1e12 : 1),   // gang.fun 按 18 位给 XAUt(6 位)的价格,小 10^12 倍
+    quoteUsd: Number(d.quoteUsd) || null, mcUsd: Number(d.fdvUsd) || null,
     volume24hUsd: Number(d.volume24hUsd) || null, trades24h: d.trades24h ?? null, creatorHandle: d.creatorHandle ?? null,
-    quoteAddress: v2 ? d.quoteAddress?.toLowerCase() ?? null : null,
+    quoteAddress: v2 ? d.quoteAddress?.toLowerCase() ?? null : null, socials: socialsOf(d),
   };
   // gang.fun 对部分底池币(比如 Ondo 代币化股票 FXIon)给不出美元价(quoteUsd = 0):用 DexScreener 按底池币地址补上,再算市值
   if (v2 && !res.quoteUsd && res.quoteAddress) {
     res.quoteUsd = await dexUsd(res.quoteAddress);
     if (res.quoteUsd && !res.mcUsd && res.priceQuote) res.mcUsd = res.priceQuote * res.supply * res.quoteUsd;
   }
-  const price = Number(v2 ? d.priceQuote : d.priceBnb);
+  const price = res.priceQuote;   // 已经修正过 XAUt 的 10^12
   if (!d.graduated) {
     if (v2) res.cost1pct = price * 1e7 * 1.01;   // 近似:现价 × 1000 万 + 1% 手续费(曲线越买越贵,实际略高)
     else {
@@ -198,7 +211,7 @@ async function detectGangV3(ca, W) {
     supply: 1e9, onePctTokens: 10_000_000, priceQuote: price, holdings: {},
     taxed: Number(c.buyTaxBps) > 0 || Number(c.sellTaxBps) > 0, postTaxBuy: Number(c.buyTaxBps) / 100, postTaxSell: Number(c.sellTaxBps) / 100,
     dividend: Number(c.dividendBps) > 0, dividendPct: Number(c.dividendBps) / 100,
-    creatorHandle: api?.creatorHandle ?? null, holders: api?.holders ?? null, lastTradeAt: api?.lastActivityAt ?? null, trades24h: api?.trades24h ?? null,
+    creatorHandle: api?.creatorHandle ?? null, holders: api?.holders ?? null, lastTradeAt: api?.lastActivityAt ?? null, trades24h: api?.trades24h ?? null, socials: socialsOf(api),
   };
   res.quoteUsd = wb ? await bnbUsd().catch(() => null) : await dexUsd(quote);
   if (res.quoteUsd) res.mcUsd = price * 1e9 * res.quoteUsd;

@@ -103,47 +103,130 @@ async function account(acct, sess) {
 }
 
 // 成本:每笔「收到代币 X、同时付出别的币」的交易算一次买入,付出的减去同一笔里退回的同种币(合约退款)。
-// 付出的币就是成本单位(内盘用 BNB / WBNB / GANG / BNCB…,和面板上的「现值」单位一致)。
-// 卖出 / 转走一部分后,剩下仓位的成本按 持仓 ÷ 累计买入 摊。用本机缓存的完整交易记录(txHistory)。
-function costsFromHistory(txs) {
+// BNB 和 WBNB 当成同一种币(按合约地址认,不按名字):用 BNB 买、退回 / 卖得 WBNB 的都算得上。
+// 两套口径:
+//   1. 底池币口径(cost / bought / sold,单位 = 第一次买入付的币):旧字段,美元成本和没有 BNB 口径时用。
+//   2. BNB 口径(全部折成 BNB):Gang 这类用底池币(GANG / BNCB…)买卖的,面板下单都是两笔挨着的交易 ——
+//      买:BNB → 底池币(兑换)、几秒后 底池币 → 代币;卖:代币 → 底池币、几秒后 底池币 → BNB。
+//      每笔买卖按它旁边那笔「BNB ⇄ 底池币」兑换的实际汇率折成 BNB;两跳的(BNB → USDT → FXIon)按底池币自己的 BNB 成本价;
+//      都配不上的部分记成底池币数量(leftIn / leftOut),展示时按现价折算并标 ≈。
+//      剩余成本按时间顺序用「平均成本法」:每次卖出 / 转走按比例减掉,清仓后归零(早就卖光的那一轮不会算进现在的仓位)。
+const WBNB = "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
+const isBnb = (ca) => ca === BNB || ca === WBNB;
+const addrOf = (x) => x?.tokenInfo?.contractAddress?.toLowerCase();
+const canon = (ca) => (isBnb(ca) ? BNB : ca);   // BNB / WBNB 统一成一个
+const PAIR_WINDOW = 180_000, PAIR_WIDE = 900_000;
+function swapIndex(txs) {
+  const idx = {};   // 底池币地址 → [{ t, rate(1 个底池币 = 多少 BNB) }]
+  for (const t of txs) {
+    if (t.status && t.status !== "confirmed") continue;
+    const ins = t.txHashList?.[0]?.instructions ?? {};
+    const send = ins.send ?? [], recv = ins.receive ?? [];
+    if (send.length !== 1 || recv.length !== 1) continue;
+    const s = send[0], r = recv[0], sc = addrOf(s), rc = addrOf(r);
+    if (!sc || !rc || isBnb(sc) === isBnb(rc)) continue;   // 必须一边是 BNB / WBNB、另一边是别的币
+    const [q, bnbAmt, qAmt] = isBnb(sc) ? [rc, Number(s.amount), Number(r.amount)] : [sc, Number(r.amount), Number(s.amount)];
+    if (!(bnbAmt > 0 && qAmt > 0)) continue;
+    (idx[q] ??= []).push({ t: Date.parse(t.txTime), rate: bnbAmt / qAmt });
+  }
+  return idx;
+}
+// 找汇率:先找前后 3 分钟内最近的一笔兑换;没有就往交易方向找 15 分钟内的(买入看之前换的,卖出看之后换回的)
+function rateNear(idx, q, t, dir) {
+  let best = null, wide = null;
+  for (const s of idx[q] ?? []) {
+    const dt = Math.abs(s.t - t);
+    if (dt <= PAIR_WINDOW && (!best || dt < best.dt)) best = { dt, rate: s.rate };
+    const ok = dir === "buy" ? s.t <= t : s.t >= t;
+    if (ok && dt <= PAIR_WIDE && (!wide || dt < wide.dt)) wide = { dt, rate: s.rate };
+  }
+  return best?.rate ?? wide?.rate ?? null;
+}
+// 某个号在某个币上的 BNB 口径:投入 / 卖回 / 剩余成本(BNB)。没配上兑换的部分按 quoteBnb(现价,1 个底池币 = 多少 BNB)折算;
+//   bal:现在的持有量(剩余成本按 持有 ÷ 记录里的剩余数量 再核一次,防止有记录外的转入转出)
+export function bnbView(c, quoteBnb, bal = null) {
+  if (!c || !(c.qtyIn > 0)) return null;
+  const conv = (exact, left) => (left > 0 ? (quoteBnb ? exact + left * quoteBnb : null) : exact);
+  const investedBnb = conv(c.bnbIn, c.leftIn), receivedBnb = conv(c.bnbOut, c.leftOut), rem = conv(c.remBnb, c.remLeft);
+  if (investedBnb === null || receivedBnb === null) return null;
+  const remainingBnb = rem === null ? null : bal !== null && c.remQty > 0 ? rem * Math.min(1, bal / c.remQty) : rem;
+  return { investedBnb, receivedBnb, remainingBnb, bnbApprox: !!c.est || c.leftIn > 0 || c.leftOut > 0 || c.remLeft > 0 };
+}
+export function costsFromHistory(txs) {   // export 只为了本机核对
   const costs = {};
+  const swaps = swapIndex(txs);
+  // 一笔付 / 收的币折成 BNB:{ bnb } 或 { left }(底池币数量,等现价折算)或 null(估不了)
+  // coin / amt:这笔付出(买入时)或收到(卖出时)的另一种币和数量;self / selfQty:这边的代币和数量。
+  //   顺序:直接是 BNB → 另一种币旁边有 BNB 兑换 → 这边的代币自己旁边有 BNB 兑换(比如 GANG 本身)→ 两跳估算 → 底池币数量留着按现价算
+  const toBnb = (coin, amt, ts, dir, c, self, selfQty) => {
+    if (isBnb(coin)) return { bnb: amt };
+    const rate = rateNear(swaps, coin, ts, dir);
+    if (rate) return { bnb: amt * rate };
+    const own = rateNear(swaps, self, ts, dir === "buy" ? "sell" : "buy");
+    if (own) return { bnb: selfQty * own };
+    // 两跳(BNB → USDT → FXIon 这种,底池币从没直接和 BNB 换过):卖出按这个底池币自己卖出的平均 BNB 价,买入按它的平均 BNB 成本价;是估算,标 ≈
+    const p = costs[coin];
+    if (p && dir === "sell" && p.qtyOut > 0 && !(p.leftOut > 0) && p.bnbOut > 0) return { bnb: amt * (p.bnbOut / p.qtyOut), est: true };
+    if (p && p.qtyIn > 0 && !(p.leftIn > 0) && p.bnbIn > 0) return { bnb: amt * (p.bnbIn / p.qtyIn), est: true };
+    if (coin === c.unitCa) return { left: amt };
+    return null;
+  };
   // 新的在前:倒过来按时间顺序算
   for (const t of [...txs].reverse()) {
     if (t.status && t.status !== "confirmed") continue;
     const ins = t.txHashList?.[0]?.instructions ?? {};
     const send = ins.send ?? [], recv = ins.receive ?? [];
+    const ts = Date.parse(t.txTime);
     for (const r of recv) {
-      const ca = r.tokenInfo?.contractAddress?.toLowerCase();
-      if (!ca || ca === BNB || r.tokenInfo.decimals === 0) continue;
-      const paid = send.filter((s) => s.tokenInfo.contractAddress.toLowerCase() !== ca);
+      const ca = addrOf(r);
+      if (!ca || isBnb(ca) || r.tokenInfo.decimals === 0) continue;   // BNB / WBNB 本身不算持仓(退回的 WBNB 不能当成「买了 WBNB」)
+      const paid = send.filter((s) => addrOf(s) !== ca);
       if (!paid.length) continue;   // 纯转入 / 领取,不算买入
-      const unit = paid[0].tokenInfo.symbol;
-      const unitCa = paid[0].tokenInfo.contractAddress.toLowerCase();
-      const out = paid.filter((s) => s.tokenInfo.contractAddress.toLowerCase() === unitCa).reduce((s, x) => s + Number(x.amount), 0);
-      const back = recv.filter((x) => x.tokenInfo.contractAddress.toLowerCase() === unitCa).reduce((s, x) => s + Number(x.amount), 0);
-      const c = (costs[ca] ??= { cost: 0, bought: 0, sold: 0, soldTokens: 0, unit });
-      if (c.unit !== unit) continue;   // 混了不同的付款币就只按第一种算
-      c.cost += out - back;
-      c.bought += Number(r.amount);
-      (c.parts ??= []).push({ t: Date.parse(t.txTime), amt: out - back });   // 每笔买入的时间和花费(算美元成本用)
+      const pay = canon(addrOf(paid[0]));
+      const same = (x) => canon(addrOf(x)) === pay && addrOf(x) !== ca;
+      const net = paid.filter(same).reduce((a, x) => a + Number(x.amount), 0) - recv.filter(same).reduce((a, x) => a + Number(x.amount), 0);
+      if (!(net > 0)) continue;
+      const qty = Number(r.amount);
+      const c = (costs[ca] ??= { unit: isBnb(pay) ? "BNB" : paid[0].tokenInfo.symbol, unitCa: pay, cost: 0, bought: 0, sold: 0, soldTokens: 0,
+        bnbIn: 0, leftIn: 0, bnbOut: 0, leftOut: 0, qtyIn: 0, qtyOut: 0, remBnb: 0, remLeft: 0, remQty: 0 });
+      // 底池币口径:只算用第一种付款币买的
+      if (pay === c.unitCa) { c.cost += net; c.bought += qty; (c.parts ??= []).push({ t: ts, amt: net }); }   // parts:每笔买入的时间和花费(算美元成本用)
+      // BNB 口径:不管用什么币付的都折成 BNB
+      const v = toBnb(pay, net, ts, "buy", c, ca, qty);
+      if (!v) continue;
+      c.qtyIn += qty; c.remQty += qty;
+      if (v.est) c.est = true;
+      if (v.bnb !== undefined) { c.bnbIn += v.bnb; c.remBnb += v.bnb; } else { c.leftIn += v.left; c.remLeft += v.left; }
     }
-    // 卖出:付出代币 X、同一笔收到别的币(BNB / 底池币)
+    // 卖出:付出代币 X、同一笔收到别的币(底池币 / BNB / WBNB…);什么都没收到的是转出
     for (const s of send) {
-      const ca = s.tokenInfo?.contractAddress?.toLowerCase();
-      if (!ca || ca === BNB || s.tokenInfo.decimals === 0) continue;
+      const ca = addrOf(s);
+      if (!ca || isBnb(ca) || s.tokenInfo.decimals === 0) continue;
       const c = costs[ca];
       if (!c) continue;
-      const got = recv.filter((x) => x.tokenInfo.symbol === c.unit).reduce((a, x) => a + Number(x.amount), 0);
-      if (!got) continue;   // 纯转出,不算卖出
-      c.sold += got;
-      c.soldTokens += Number(s.amount);
+      const qty = Number(s.amount);
+      const gotOf = (coin) => recv.filter((x) => canon(addrOf(x)) === coin && addrOf(x) !== ca).reduce((a, x) => a + Number(x.amount), 0);
+      // 收到的币:优先底池币,其次 BNB,再其次别的
+      const coins = [...new Set(recv.map((x) => canon(addrOf(x))).filter((x) => x && x !== ca))];
+      const coin = coins.includes(c.unitCa) ? c.unitCa : coins.includes(BNB) ? BNB : coins[0];
+      const got = coin ? gotOf(coin) : 0;
+      if (got > 0) {
+        if (coin === c.unitCa) { c.sold += got; c.soldTokens += qty; }
+        const v = toBnb(coin, got, ts, "sell", c, ca, qty);
+        if (v) { c.qtyOut += qty; if (v.est) c.est = true; if (v.bnb !== undefined) c.bnbOut += v.bnb; else c.leftOut += v.left; }
+      }
+      // 卖出 / 转走都让剩余仓位按比例变少(平均成本法)
+      const f = c.remQty > 0 ? Math.max(0, 1 - qty / c.remQty) : 0;
+      c.remBnb *= f; c.remLeft *= f; c.remQty = Math.max(0, c.remQty - qty);
+      if (c.remQty < 1e-9) { c.remBnb = 0; c.remLeft = 0; c.remQty = 0; }
     }
   }
   return costs;
 }
 const costCache = {};
 // 单个代币的成本(给查询卡片用):有 2 分钟内的缓存就直接用,否则重新拉两个号的交易记录
-export async function costsFor(ca, holdings) {
+// quoteBnb:1 个底池币现在值多少 BNB(没配上兑换的部分用它折算)
+export async function costsFor(ca, holdings, quoteBnb = null) {
   const key = ca.toLowerCase();
   const res = {};
   for (const acct of Object.keys(holdings ?? {})) {
@@ -152,7 +235,7 @@ export async function costsFor(ca, holdings) {
     }
     const c = costCache[acct].costs[key];
     const held = holdings?.[acct]?.tokens;
-    if (c && c.bought > 0 && held) res[acct] = { cost: c.cost * Math.min(1, held / c.bought), unit: c.unit, invested: c.cost, received: c.sold };
+    if (c && (c.bought > 0 || c.qtyIn > 0) && held) res[acct] = { cost: c.bought > 0 ? c.cost * Math.min(1, held / c.bought) : null, unit: c.unit, invested: c.cost, received: c.sold, ...bnbView(c, quoteBnb, held) };
   }
   return res;
 }
@@ -191,6 +274,14 @@ async function addUsd(tokens, accts, detected, union) {
         } else { costUsd = qUsd ? c.cost * share * qUsd : null; approx = true; }
       }
       t.usd[a.acct] = { costUsd, valueUsd, pnlUsd: costUsd != null && valueUsd != null ? valueUsd - costUsd : null, approx };
+      // BNB 口径:现值按底池币现价折成 BNB;剩余成本按平均成本法(早就卖光的那一轮不算进来)
+      const quoteBnb = !t.quote || /^w?bnb$/i.test(t.quote) ? 1 : qUsd && now ? qUsd / now : null;
+      const bv = bnbView(c, quoteBnb, bal);
+      (t.bnb ??= {})[a.acct] = {
+        value: t.values?.[a.acct] != null && quoteBnb ? t.values[a.acct] * quoteBnb : null,
+        cost: bv?.remainingBnb ?? null,
+        approx: bv?.bnbApprox ?? false,
+      };
     }
   }
 }

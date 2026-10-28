@@ -5,6 +5,7 @@
 import { ethers } from "ethers";
 import { logRpc } from "./logrpc.mjs";
 import { provider } from "./detect.mjs";
+import { gangJson } from "./upstream.mjs";
 
 const CORE = "0xebe7b6C1089D9F72aD07f34E36d898e44E5e27f3";
 const coreI = new ethers.Interface([
@@ -25,6 +26,7 @@ export async function handleOf(addr) {
   } catch {}
   if (name && !name.endsWith(".ai")) name += ".ai";
   handles.set(addr, { at: Date.now(), name });
+  if (handles.size > 20000) handles.delete(handles.keys().next().value);   // 最多记 2 万个地址,最早的先丢
   return name;
 }
 const fmt = (x) => Number(ethers.formatEther(x));
@@ -32,7 +34,7 @@ const cache = new Map();   // ca → { at, data }
 
 
 async function gangTrades(ca, v2) {
-  const j = await fetch(`https://gang.fun/api/${v2 === "v3" ? "v3/tokens" : v2 ? "stocks/tokens" : "tokens"}/${ca}/trades?limit=60&offset=0`, { signal: AbortSignal.timeout(15000) }).then((r) => r.json());
+  const j = await gangJson(`https://gang.fun/api/${v2 === "v3" ? "v3/tokens" : v2 ? "stocks/tokens" : "tokens"}/${ca}/trades?limit=60&offset=0`);
   return (j.items ?? []).map((t) => ({
     ts: t.ts, side: t.side, trader: t.trader, handle: t.traderHandle || null, tx: t.tx,
     // 买入实际付出 = 金额 + 平台费(接口金额不含费;卖出金额就是到手)
@@ -64,14 +66,21 @@ async function fourTrades(ca) {
   return items;
 }
 
+const busy = new Map();
 export async function recentTrades(ca, platform) {
-  const key = ca.toLowerCase();
-  const hit = cache.get(key);
+  const key = ca.toLowerCase(), ck = `${key}:${platform}`;   // 缓存按「币 + 平台」分开,传错平台不会把空结果塞给别人
+  const hit = cache.get(ck);
   if (hit && Date.now() - hit.at < 8000) return hit.data;
+  // 同一个币同时只拉一次;拉失败(接口限流)先用上一次的
+  if (!busy.has(ck)) busy.set(ck, recentOnce(key, platform, ck).finally(() => busy.delete(ck)));
+  return busy.get(ck).catch((e) => { if (hit) return hit.data; throw e; });
+}
+async function recentOnce(key, platform, ck) {
   let items = [], source = null;
   if (platform === "gangv1" || platform === "gangv2" || platform === "gangv3") { items = await gangTrades(key, platform === "gangv3" ? "v3" : platform === "gangv2"); source = "gang.fun"; }
   else if (platform === "four") { items = await fourTrades(key); source = "链上"; }
   const data = { source, items };
-  cache.set(key, { at: Date.now(), data });
+  cache.set(ck, { at: Date.now(), data });
+  if (cache.size > 500) cache.delete(cache.keys().next().value);
   return data;
 }

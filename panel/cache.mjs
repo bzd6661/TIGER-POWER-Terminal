@@ -7,6 +7,7 @@
 //   任何读写出错都当没缓存处理(返回 null),不影响面板本身。/api/cache-status 看状态。
 import { fileURLToPath } from "node:url";
 import "../env.mjs";
+import { dataFile } from "./datadir.mjs";
 
 const st = { backend: "none", redis: null, hits: 0, misses: 0, writes: 0, errors: 0, lastError: null };
 const err = (e) => { st.errors++; st.lastError = String(e?.message ?? e).slice(0, 200); return null; };
@@ -46,7 +47,7 @@ async function openSqlite() {
     try { mod = await import("node:sqlite"); } finally { process.emitWarning = emit; }
   } catch { return null; }   // Node 22.5 以前没有
   try {
-    const d = new mod.DatabaseSync(fileURLToPath(new URL("./cache.db", import.meta.url)));
+    const d = new mod.DatabaseSync(dataFile("cache.db"));
     d.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;");
     for (const s of SCHEMA) d.exec(s);
     st.backend = "sqlite";

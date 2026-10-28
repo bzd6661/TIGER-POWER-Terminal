@@ -10,11 +10,12 @@ const BNB = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const net = ethers.Network.from(56);
 const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
 provider.pollingInterval = 300;   // 等回执时每 0.3 秒查一次(ethers 默认 4 秒)
-const erc20 = new ethers.Interface(["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)", "function symbol() view returns (string)"]);
+const erc20 = new ethers.Interface(["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)", "function symbol() view returns (string)", "function allowance(address,address) view returns (uint256)"]);
 const t0 = Date.now();
 const log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...a);
 const die = (m) => { console.error(`✗ ${m}`); process.exit(1); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+if (process.argv[2] === "--why") { console.log(await failInfo(process.argv[3])); process.exit(0); }   // 诊断:node dexsell.mjs --why <txHash>
 
 const args = process.argv.slice(2);
 const ACCT = takeAcct(args);
@@ -36,6 +37,15 @@ function baw(a) {
   });
 }
 const call = (fn, a = []) => provider.call({ to: ca, data: erc20.encodeFunctionData(fn, a) }).then((r) => erc20.decodeFunctionResult(fn, r)[0]);
+// 兑换失败时看链上回执:是不是 gas 耗尽(用掉 ≥ 95% 的上限)。
+//   第一次卖某个币时,币安钱包把「授权」和「卖出」放在同一个块里提交,卖出的 gas 是在授权上链前估的;
+//   转账逻辑重的币(Gang V3 分红币等)会估少,卖出在代币转账里耗尽 gas(2026-10-28 AGORA:要 55 万,只给了 50.7 万)。
+async function failInfo(txHash) {
+  if (!txHash) return null;
+  const [tx, rc] = await Promise.all([provider.getTransaction(txHash), provider.getTransactionReceipt(txHash)]).catch(() => []);
+  if (!tx || !rc || rc.status !== 0) return null;
+  return { outOfGas: rc.gasUsed * 100n >= tx.gasLimit * 95n, spender: tx.to, gasUsed: rc.gasUsed, gasLimit: tx.gasLimit };
+}
 
 const addr = await baw(["wallet", "address"]);
 const W = addr?.data?.addresses?.find((x) => x.binanceChainId === "56")?.address;
@@ -63,17 +73,30 @@ log(`${sym} ${ca}  卖 ${qty} 个(持仓 ${ethers.formatUnits(bal, dec)} 的 ${p
 if (DRY) { log("--dry:只报价,没有卖"); process.exit(0); }
 
 const before = await provider.getBalance(W);
-const sw = await baw(["market-order", "swap", "--fromTokenQty", qty, "--fromToken", ca, "--toToken", BNB, "--binanceChainId", "56", "--slippage", slip]);
-if (!sw.success) die(`卖出提交失败:${JSON.stringify(sw.error ?? sw)}`);
-log(`已提交 orderId ${sw.data.orderId},等待成交…`);
-let o;
-for (let i = 0; i < 75; i++) {
-  o = (await baw(["market-order", "list", "--orderId", sw.data.orderId]))?.data?.list?.[0];
-  if (o?.status === "FINISHED" || o?.status === "FAILED") break;
-  await sleep(400);   // 兑换订单状态 0.4 秒查一次
+async function swapOnce() {
+  const sw = await baw(["market-order", "swap", "--fromTokenQty", qty, "--fromToken", ca, "--toToken", BNB, "--binanceChainId", "56", "--slippage", slip]);
+  if (!sw.success) die(`卖出提交失败:${JSON.stringify(sw.error ?? sw)}`);
+  log(`已提交 orderId ${sw.data.orderId},等待成交…`);
+  let o;
+  for (let i = 0; i < 75; i++) {
+    o = (await baw(["market-order", "list", "--orderId", sw.data.orderId]))?.data?.list?.[0];
+    if (o?.status === "FINISHED" || o?.status === "FAILED") break;
+    await sleep(400);   // 兑换订单状态 0.4 秒查一次
+  }
+  if (o?.status !== "FINISHED" && o?.status !== "FAILED") die(`60 秒还没成交(${o?.status}),不要重复提交;稍后用 baw market-order list --orderId ${sw.data.orderId} --json 查`);
+  return o;
 }
-if (o?.status === "FAILED") die(`卖出失败(价格变动超过滑点或流动性不足),币还在钱包里:${JSON.stringify(o)}`);
-if (o?.status !== "FINISHED") die(`60 秒还没成交(${o?.status}),不要重复提交;稍后用 baw market-order list --orderId ${sw.data.orderId} --json 查`);
+let o = await swapOnce();
+if (o.status === "FAILED") {
+  const f = await failInfo(o.txHash);
+  if (!f?.outOfGas) die(`卖出失败(价格变动超过滑点或流动性不足),币还在钱包里:${JSON.stringify(o)}`);
+  // gas 耗尽:这次的授权已经上链,再提交一次币安就会带着授权估 gas。只重试一次,而且授权和余额都还够才重试
+  const [allow, balNow] = await Promise.all([call("allowance", [W, f.spender]), call("balanceOf", [W])]);
+  if (allow < amount || balNow < amount) die(`卖出失败:gas 不够(用了 ${f.gasUsed}/${f.gasLimit}),授权或余额已经不够这笔,没有重试,币还在钱包里:${JSON.stringify(o)}`);
+  log(`卖出 gas 不够(用了 ${f.gasUsed}/${f.gasLimit}):第一次卖这个币时钱包把授权和卖出一起提交,gas 估少了。授权已上链,自动重试一次…`);
+  o = await swapOnce();
+  if (o.status === "FAILED") { const g = await failInfo(o.txHash); die(`重试也失败了(${g?.outOfGas ? "还是 gas 不够" : "价格变动超过滑点或流动性不足"}),币还在钱包里:${JSON.stringify(o)}`); }
+}
 const after = await provider.getBalance(W);
 log(`✓ 成交 tx ${o.txHash}`);
 log(`  到手 ${o.toTokenActualQty} BNB(报价 ${est},${((Number(o.toTokenActualQty) / est - 1) * 100).toFixed(1)}%);钱包 BNB 变化 ${ethers.formatEther(after - before)}(已扣 gas)`);

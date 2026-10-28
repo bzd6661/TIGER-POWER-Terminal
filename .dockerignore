@@ -1,0 +1,13 @@
+# 白名单:镜像里只放公开只读版要用的文件,钱包 / 登录 / 本机状态一律不进镜像
+*
+!package.json
+!package-lock.json
+!env.mjs
+!proxy.mjs
+!accounts.mjs
+!contracts/tip.json
+!panel/*.mjs
+!panel/*.html
+!panel/*.js
+!panel/*.svg
+!panel/vendor/

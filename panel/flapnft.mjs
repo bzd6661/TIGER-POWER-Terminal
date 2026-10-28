@@ -9,6 +9,7 @@ import { ethers } from "ethers";
 import { provider } from "./detect.mjs";
 import { logRpc, LOG_STEP, HAS_PRIVATE, PUBLIC_WINDOW } from "./logrpc.mjs";
 import { loadTrades, saveTrades } from "./cache.mjs";
+import { dataFile } from "./datadir.mjs";
 
 export const FLAP_PORTAL = "0xe2cE6ab80874Fa9Fa2aAE65D277Dd6B8e65C9De0";
 export const AGENT_ID_NFT = "0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F";
@@ -28,7 +29,7 @@ export const portalI = new ethers.Interface([
 ]);
 const erc = new ethers.Interface(["function balanceOf(address) view returns (uint256)", "function name() view returns (string)", "function symbol() view returns (string)"]);
 
-const FILE = fileURLToPath(new URL("./flapnft.json", import.meta.url));
+const FILE = dataFile("flapnft.json");
 let reg = { tokens: {}, lastBlock: 0 };
 try { reg = { tokens: {}, lastBlock: 0, ...JSON.parse(readFileSync(FILE, "utf8")) }; } catch {}
 const save = () => { try { writeFileSync(FILE, JSON.stringify(reg)); } catch {} };
@@ -139,7 +140,8 @@ async function realTrader(addr, tx) {
 // 返回新的在前:{ ts, side, trader, via, tx, quote(报价币数量,含手续费), fee, tokens, price }
 export async function flapTrades(ca) {
   const k = lc(ca), g = reg.tokens[k];
-  if (!tradeCache.has(k)) { const ch = await loadTrades("flap", k); if (ch?.rows.length) tradeCache.set(k, { upto: ch.cursor - 15, trades: ch.rows }); }
+  // 缓存里有进度就接着翻(哪怕一笔成交都没有),别每次从头扫
+  if (!tradeCache.has(k)) { const ch = await loadTrades("flap", k); if (ch?.cursor) tradeCache.set(k, { upto: ch.cursor - 15, trades: ch.rows ?? [] }); }
   const hit = tradeCache.get(k);
   const head = await provider.getBlockNumber();
   const start = hit ? hit.upto + 1 : Math.max(g?.block ?? head - (HAS_PRIVATE ? BACKFILL : PUBLIC_WINDOW), HAS_PRIVATE ? 0 : head - PUBLIC_WINDOW);

@@ -130,6 +130,7 @@
   .cseg { display:inline-flex; gap:2px; background:var(--s2); border:1px solid var(--line); border-radius:7px; padding:2px; }
   .cseg button { background:none; border:0; color:var(--mute); padding:2px 8px; border-radius:5px; font-size:12px; }
   .cseg button.on { background:var(--s3); color:var(--text); }
+  .cseg button:disabled { opacity:.35; cursor:not-allowed; }
   .cinfo { font-size:11px; }
   .cbody { flex:1; min-height:0; position:relative; }
   /* GMGN 图表底栏正中的「Powered by GMGN」用同色块盖住(两边的周期按钮、时间、log 等照常能点);右上角保留「K 线:GMGN」署名链接 */
@@ -234,6 +235,8 @@
   .tiprow .segs button.on { border-color:var(--acc); color:var(--text); }
   .modal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:60; padding:16px; }
   .modal[hidden] { display:none; }
+  .cfmodal { z-index:80; }
+  .cfmodal .confirm { width:min(460px, 100%); margin:0; background:var(--s1); border-color:var(--line2); box-shadow:0 20px 60px rgba(0,0,0,.5); padding:16px; }
   .mbox { width:100%; max-width:360px; background:var(--s1); border:1px solid var(--line2); border-radius:14px; padding:18px; text-align:center; }
   .mbox h3 { margin:0 0 4px; font-size:16px; }
   .qr { width:220px; height:220px; margin:14px auto 10px; background:#fff; border-radius:10px; padding:8px; display:flex; align-items:center; justify-content:center; color:#555; }
@@ -487,8 +490,9 @@
   .hlist .empty, .mslist .empty { padding:16px 8px; }
 
   /* 左侧扫链栏:平台角标(放在币名后),标签更紧凑,三个标签在 140px 里放得下 */
-  .msrow .nm .r1 .msmk { flex:none; font-style:normal; font-size:10px; font-weight:700; line-height:15px; height:15px; padding:0 4px; border-radius:4px; color:#0a0c0f; align-self:center; }
-  .msrow .nm .r1 .msmk.pd-four { background:var(--pc-four); } .msrow .nm .r1 .msmk.pd-gang { background:var(--pc-gang); } .msrow .nm .r1 .msmk.pd-flap { background:var(--pc-flap); }
+  /* 平台角标放在标签行第一个,和标签同高 */
+  .msrow .mtags .msmk { flex:none; font-style:normal; font-size:10.5px; font-weight:700; line-height:20px; height:20px; padding:0 5px; border-radius:4px; color:#0a0c0f; display:inline-flex; align-items:center; box-sizing:border-box; }
+  .msrow .mtags .msmk.pd-four { background:var(--pc-four); } .msrow .mtags .msmk.pd-gang { background:var(--pc-gang); } .msrow .mtags .msmk.pd-flap { background:var(--pc-flap); }
   .msrow .nm .mtags { gap:3px; }
   .msrow .nm .mtags .mtg { padding:0 5px; font-size:11px; }
 </style>
@@ -749,7 +753,9 @@ document.addEventListener("mouseover", (e) => {
 document.addEventListener("mouseout", (e) => { const el = e.target.closest?.("[data-ca]"); if (el) clearTimeout(el._pf); });
 // wantCa:最近一次要打开的币。快速连点几个币、或者旧币的后台刷新回来得晚时,回来的结果如果不是这个币就丢掉,
 // 免得「上面是一个币、下面的图是另一个币」
-let wantCa = null, chartCa = null;
+let wantCa = null, chartCa = null, chartKey = null;
+// 图表按「币 + 实际用的图源 + 内外盘」画:毕业后图源可能从自绘换成 GMGN(V3 内盘不收录),外盘 K 线也要重新拉
+const chartKeyOf = (d) => `${d?.ca?.toLowerCase()}|${chartSrc()}|${d?.stage}`;
 async function load(ca, { quiet = false } = {}) {
   ca = (ca ?? $("ca").value).trim();
   if (!/^0x[0-9a-fA-F]{40}$/.test(ca)) { if (!quiet) toast("CA 格式不对", "err"); return; }
@@ -767,17 +773,35 @@ async function load(ca, { quiet = false } = {}) {
     cur = d;
     $("ca").value = "";
     if (switching || chartCa !== d.ca.toLowerCase()) { history.replaceState(null, "", "/?ca=" + d.ca); remember(d); trades = null; renderChart(); }
+    else if (chartKey !== chartKeyOf(d)) renderChart();
     renderHead(); renderTrade(); renderTab(); renderSideSel(); try { renderClip(); } catch {}
     if (switching) { loadTrades(); loadAT(); loadNotes(); }
   } catch (e) { if (!quiet && wantCa === k) { toast("查询失败:" + e.message, "err"); if (!cur || cur.ca.toLowerCase() !== k) $("tokenHead").innerHTML = `<div class="empty">查询失败:${esc(e.message)}</div>`; } }
 }
-// 一个号的盈亏:现值 + 已卖回 − 投入(都是底池币单位)
+// 一个号的盈亏 = 现值 + 已卖回 − 投入,统一按 BNB 算:
+//   投入 / 卖回是实际花掉 / 收回的 BNB(用底池币买卖的,按旁边那笔「BNB ⇄ 底池币」兑换的汇率;配不上的按现价,标 ≈);
+//   现值 = 底池币现值 × 现价(cur.quoteBnb:1 个底池币 = 多少 BNB)。拿不到 BNB 口径时退回底池币单位
 function pnlOf(k) {
   const h = cur.holdings[k], c = cur.costs?.[k];
   if (!c || !(c.invested > 0) || h?.value === undefined || h?.value === null) return null;
+  if (cur.quoteBnb && c.investedBnb > 0 && c.receivedBnb != null) {
+    const value = h.value * cur.quoteBnb, v = value + c.receivedBnb - c.investedBnb;
+    return { v, p: (v / c.investedBnb) * 100, invested: c.investedBnb, received: c.receivedBnb, value, unit: "BNB", net: c.investedBnb - c.receivedBnb, approx: !!c.bnbApprox };
+  }
+  // 退回底池币口径:只有成本也是用底池币付的才能相减(BNB 和 WBNB 算一种),单位对不上就不算
+  if (unitOf(c.unit) !== unitOf(cur.quote)) return null;
   const v = h.value + (c.received || 0) - c.invested;
-  return { v, p: (v / c.invested) * 100, invested: c.invested, received: c.received || 0, value: h.value, unit: c.unit, net: c.invested - (c.received || 0) };
+  return { v, p: (v / c.invested) * 100, invested: c.invested, received: c.received || 0, value: h.value, unit: unitOf(c.unit), net: c.invested - (c.received || 0) };
 }
+// 一个号的累计买入 / 卖回,用和盈亏同一个单位(有 BNB 口径就用 BNB),给没有现值、算不了盈亏的时候显示
+function costView(c) {
+  if (!c) return null;
+  if (cur.quoteBnb && c.investedBnb > 0 && c.receivedBnb != null) return { invested: c.investedBnb, received: c.receivedBnb, unit: "BNB", approx: !!c.bnbApprox };
+  return { invested: c.invested ?? c.cost, received: c.received || 0, unit: unitOf(c.unit), approx: false };
+}
+// 持仓现值的显示单位:能折成 BNB 就用 BNB
+const posUnit = () => (cur?.quoteBnb ? "BNB" : unitOf(cur?.quote));
+const toPos = (x) => (x === undefined || x === null ? x : cur?.quoteBnb ? x * cur.quoteBnb : x);
 const usd = (x) => (x === null || x === undefined || !isFinite(x) ? "—" : "$" + num(x, 2));
 const chgHtml = (x) => (x === null || x === undefined ? '<span class="faint">—</span>' : `<span class="${x >= 0 ? "up" : "down"}">${x >= 0 ? "+" : ""}${x.toFixed(1)}%</span>`);
 // GMGN 邀请链接(官方文档 docs.gmgn.ai/index/referral-link):https://gmgn.ai/{chain}/token/{邀请码}_{合约}
@@ -788,21 +812,26 @@ function renderHead() {
   const links = [["GMGN", gmgnUrl(d.ca)], ["BscScan", `https://bscscan.com/token/${d.ca}`]];
   if (d.platform === "four") links.push(["four.meme", `https://four.meme/token/${d.ca}`]);
   if (d.platform?.startsWith("gang")) links.push(["gang.fun", `https://gang.fun/token/${d.ca}`]);
+  // 发币人填的推特 / 官网 / TG(detect 里已经只留 http(s) 链接)
+  if (d.socials?.twitter) links.push(["推特", d.socials.twitter]);
+  if (d.socials?.website) links.push(["官网", d.socials.website]);
+  if (d.socials?.telegram) links.push(["TG", d.socials.telegram]);
   // 两个号合计的持仓和盈亏
-  let tokens = 0, value = 0, hasVal = false, pv = 0, inv = 0, hasPnl = false;
+  // 盈亏只把同一个单位的号加在一起(正常两个号都是 BNB 口径;万一一个有一个没有,只加和显示单位一致的)
+  let tokens = 0, value = 0, hasVal = false, pv = 0, inv = 0, hasPnl = false, pUnit = posUnit(), pApprox = false;
   for (const k of Object.keys(d.holdings)) {
     const h = d.holdings[k]; tokens += h.tokens || h.shares || 0;
-    if (h.value !== undefined && h.value !== null) { value += h.value; hasVal = true; }
-    const p = pnlOf(k); if (p) { pv += p.v; inv += p.invested; hasPnl = true; }
+    if (h.value !== undefined && h.value !== null) { value += toPos(h.value); hasVal = true; }
+    const p = pnlOf(k); if (p && p.unit === pUnit) { pv += p.v; inv += p.invested; hasPnl = true; pApprox ||= p.approx; }
   }
-  const holdTxt = tokens > 0 ? `${num(tokens)}${hasVal ? ` <small class="mute">≈ ${num(value)} ${esc(unit)}</small>` : ""}` : '<span class="faint">未持有</span>';
-  const pnlTxt = hasPnl ? `<span class="${pv >= 0 ? "up" : "down"}">${pv >= 0 ? "+" : ""}${num(pv)}</span><small class="${pv >= 0 ? "up" : "down"}">${pv >= 0 ? "+" : ""}${((pv / inv) * 100).toFixed(1)}%</small>` : '<span class="faint">—</span>';
+  const holdTxt = tokens > 0 ? `${num(tokens)}${hasVal ? ` <small class="mute">≈ ${num(value)} ${esc(posUnit())}</small>` : ""}` : '<span class="faint">未持有</span>';
+  const pnlTxt = hasPnl ? `<span class="${pv >= 0 ? "up" : "down"}" ${pApprox ? 'title="部分成本按底池币现价折算"' : ""}>${pApprox ? "≈" : ""}${pv >= 0 ? "+" : ""}${num(pv)}</span><small class="${pv >= 0 ? "up" : "down"}">${pv >= 0 ? "+" : ""}${((pv / inv) * 100).toFixed(1)}%</small>` : '<span class="faint">—</span>';
   $("tokenHead").innerHTML = `
     <div class="thead">${logo(d.ca, d.symbol)}
       <div class="thmain">
         <div class="thr1"><span class="tsym" title="名称">${esc(d.name || d.symbol)}</span><span class="tname">${esc(d.symbol)}</span>
           <span class="ca mono" id="caCopy" title="点击复制 ${d.ca}">${d.ca.slice(0, 6)}…${d.ca.slice(-4)} ⧉</span>
-          <span class="lnks"><a class="lnk" href="https://x.com/search?q=${d.ca}&f=live" target="_blank" rel="noopener" title="在 X 上搜这个 CA(看谁在喊)">𝕏</a>${links.map(([n, u]) => `<a class="lnk" href="${u}" target="_blank" rel="noopener">${n}</a>`).join("")}</span></div>
+          <span class="lnks"><a class="lnk" href="https://x.com/search?q=${d.ca}&f=live" target="_blank" rel="noopener" title="在 X 上搜这个 CA(看谁在喊)">𝕏</a>${links.map(([n, u]) => `<a class="lnk" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(n)}</a>`).join("")}</span></div>
         <div class="badges"><span class="bdg"><i class="pdot ${inner ? "pd-in" : "pd-out"}"></i>${inner ? "内盘" : "外盘"}</span><span class="bdg"><i class="pdot ${PDOT(d.platform)}"></i>${esc(d.platformLabel)}</span>${d.taxed ? `<span class="bdg tax" title="发射后代币税(外盘交易时收)">${d.postTaxBuy !== undefined ? `税 ${+d.postTaxBuy}/${+(d.postTaxSell ?? d.postTaxBuy)}%` : "有税"}</span>` : ""}${d.platform?.startsWith("gang") ? divTag(d, "bdg") : ""}${d.paused ? '<span class="bdg bad">已暂停</span>' : ""}${d.nftGate ? '<span class="bdg bad">需 Agent ID</span>' : ""}${d.creatorHandle ? `<span class="bdg">开发者 ${esc(d.creatorHandle)}</span>` : ""}</div>
       </div>
       <span class="htools" id="headTools"></span>
@@ -810,7 +839,7 @@ function renderHead() {
     <div class="metrics">
       <div class="m"><div class="k">市值${d.mcEstimated ? "(估算)" : ""}</div><div class="v num">${usd(d.mcUsd)}</div></div>
       <div class="m mine"><div class="k">我的持仓</div><div class="v num">${holdTxt}</div></div>
-      <div class="m mine"><div class="k">盈亏(${esc(unit)})</div><div class="v num">${pnlTxt}</div></div>
+      <div class="m mine"><div class="k">盈亏(${esc(pUnit)})</div><div class="v num">${pnlTxt}</div></div>
       ${d.progress !== undefined && d.progress !== null ? `<div class="m prog"><div class="k">${inner ? "内盘进度" : "已毕业"}</div><div class="v num">${Number(d.progress).toFixed(2)}%</div><div class="bar"><i style="width:${Math.min(100, d.progress)}%"></i></div></div>` : ""}
       <div class="m"><div class="k">买 / 卖${st ? `(近 ${st.windowMin >= 120 ? Math.round(st.windowMin / 60) + " 时" : st.windowMin + " 分"})` : ""}</div><div class="v num">${st ? `<span class="up">${st.buys}</span> / <span class="down">${st.sells}</span>` : "—"}</div></div>
       <div class="m"><div class="k">成交额</div><div class="v num">${d.volume24hUsd ? usd(d.volume24hUsd) + ' <small class="faint">24h</small>' : st ? num(st.volume) + ` <small class="faint">${esc(unit)}</small>` : "—"}</div></div>
@@ -827,23 +856,27 @@ const IVS = [["1s", 1], ["15s", 15], ["1m", 60], ["5m", 300], ["15m", 900], ["1h
 const cv = { iv: 60, mode: "mcap", src: "own" };
 try { Object.assign(cv, JSON.parse(localStorage.getItem("chartView") || "{}")); } catch {}
 const saveCv = () => { try { localStorage.setItem("chartView", JSON.stringify(cv)); } catch {} };
+// GMGN 不收录 Gang V3 内盘(K 线一直空白):这类币自动用自绘,不改用户选的偏好,毕业后照常用 GMGN
+const noGmgn = (d) => d?.platform === "gangv3" && d?.stage === "inner";
+const chartSrc = () => (cv.src === "gmgn" && noGmgn(cur) ? "own" : cv.src);
 let chart = null, cSeries = null, vSeries = null, hist = null, histCa = null, chartFit = true;
 async function renderChart() {
   chartCa = cur?.ca?.toLowerCase() ?? null;   // 记下图表画的是哪个币(load 里对不上就重画)
+  chartKey = chartKeyOf(cur);
   const d = cur;
   hist = null; histCa = d.ca; chartFit = true;
   $("chart").innerHTML = `<div class="ctool">
       <span class="cseg" id="cIv">${IVS.map(([l, s]) => `<button data-s="${s}" class="${cv.iv === s ? "on" : ""}">${l}</button>`).join("")}</span>
       <span class="cseg" id="cMode"><button data-m="mcap" class="${cv.mode === "mcap" ? "on" : ""}">市值</button><button data-m="price" class="${cv.mode === "price" ? "on" : ""}">价格</button></span>
       <span class="cinfo faint" id="cInfo"></span>
-      <button class="hbtn ${qb.on ? "on" : ""}" id="qbTog" style="margin-left:auto" title="一键买卖浮窗(P1/P2/P3 预设,可拖动)">${ICON("bolt", 13)} 浮窗</button><span class="cseg" id="cSrc"><button data-c="own" class="${cv.src === "own" ? "on" : ""}">自绘</button><button data-c="gmgn" class="${cv.src === "gmgn" ? "on" : ""}">GMGN</button></span>
+      <button class="hbtn ${qb.on ? "on" : ""}" id="qbTog" style="margin-left:auto" title="一键买卖浮窗(P1/P2/P3 预设,可拖动)">${ICON("bolt", 13)} 浮窗</button><span class="cseg" id="cSrc"><button data-c="own" class="${chartSrc() === "own" ? "on" : ""}">自绘</button><button data-c="gmgn" class="${chartSrc() === "gmgn" ? "on" : ""}" ${noGmgn(d) ? 'disabled title="GMGN 还不收录 Gang V3 内盘的 K 线,已自动用自绘"' : ""}>GMGN</button></span>
     </div><div class="cbody" id="cBody"></div>`;
   document.querySelectorAll("#cIv button").forEach((b) => (b.onclick = () => { cv.iv = Number(b.dataset.s); saveCv(); chartFit = true; drawChart(); markOn("#cIv button", "s", cv.iv); }));
   document.querySelectorAll("#cMode button").forEach((b) => (b.onclick = () => { cv.mode = b.dataset.m; saveCv(); chartFit = true; drawChart(); markOn("#cMode button", "m", cv.mode); }));
   document.querySelectorAll("#cSrc button").forEach((b) => (b.onclick = () => { cv.src = b.dataset.c; saveCv(); renderChart(); }));
   $("qbTog").onclick = () => { qb.on = !qb.on; saveQb(); renderQb(); markQbBtn(); };
-  $("cIv").style.visibility = $("cMode").style.visibility = cv.src === "own" ? "" : "hidden";
-  if (cv.src === "gmgn") {
+  $("cIv").style.visibility = $("cMode").style.visibility = chartSrc() === "own" ? "" : "hidden";
+  if (chartSrc() === "gmgn") {
     const deployed = d.symbol !== "(未部署)";
     $("cBody").innerHTML = deployed
       ? `<iframe src="https://www.gmgn.cc/kline/bsc/${d.ca.toLowerCase()}?theme=dark&interval=1" loading="lazy" referrerpolicy="no-referrer"></iframe><div class="gmgncover"></div><a class="gmgncredit" href="${gmgnUrl(d.ca)}" target="_blank" rel="noopener" title="K 线图由 GMGN 免费提供">K 线:GMGN ↗</a>`
@@ -869,7 +902,7 @@ async function renderChart() {
 }
 function markOn(sel, key, val) { document.querySelectorAll(sel).forEach((b) => b.classList.toggle("on", String(b.dataset[key]) === String(val))); }
 async function loadHistory() {
-  if (!cur || cv.src !== "own") return;
+  if (!cur || chartSrc() !== "own") return;
   const ca = cur.ca;
   try {
     const r = await post("/api/history", { ca });
@@ -963,25 +996,26 @@ function renderTab() {
     const qUsd = cur.quoteUsd ?? hist?.quoteUsd ?? null;
     const usdOf = (x) => (qUsd && x !== undefined && x !== null ? `<div class="faint">${usd(x * qUsd)}</div>` : "");
     let tTok = 0, tVal = 0, hasVal = false, tInv = 0, tRec = 0, tPnl = 0, hasPnl = false;
+    const tUnit = posUnit();   // 合计只加和这个单位一致、且算得出盈亏的号(百分比的分母才对得上)
     const rows = Object.entries(cur.holdings).map(([k, h]) => {
       const c = cur.costs?.[k], p = pnlOf(k), amt = h.shares ?? h.tokens ?? 0, has = amt > 0;
       tTok += amt || 0;
-      if (h.value !== undefined && h.value !== null) { tVal += h.value; hasVal = true; }
-      if (c) { tInv += c.invested ?? c.cost ?? 0; tRec += c.received || 0; }
-      if (p) { tPnl += p.v; hasPnl = true; }
+      if (h.value !== undefined && h.value !== null) { tVal += toPos(h.value); hasVal = true; }
+      if (p && p.unit === tUnit) { tInv += p.invested; tRec += p.received; tPnl += p.v; hasPnl = true; }
+      const cv = costView(c);
       const dis = running || !has || !connected().includes(k) ? "disabled" : "";
       return `<tr class="${has ? "" : "faint"}"><td><b>账号 ${k}</b><div class="mono faint">${esc(short(cur.wallets?.[k] ?? ""))}</div></td>
         <td>${has ? (h.shares !== undefined ? num(h.shares) + " 份" : num(h.tokens) + " 个") : "0"}${h.pctOfSupply ? `<div class="faint">${h.pctOfSupply}%</div>` : ""}</td>
-        <td>${h.value !== undefined && h.value !== null ? num(h.value) + " " + esc(unit) + usdOf(h.value) : has ? (cur.stage === "inner" ? "—" : "外盘按卖出报价") : "—"}</td>
-        <td>${c ? num(c.invested ?? c.cost) + " " + esc(c.unit ?? unit) + (c.received ? `<div class="faint">卖回 ${num(c.received)}</div>` : "") : "—"}</td>
-        <td>${p ? `<span class="${p.v >= 0 ? "up" : "down"}">${p.v >= 0 ? "+" : ""}${num(p.v)}<div>${p.v >= 0 ? "+" : ""}${p.p.toFixed(1)}%</div></span>` : '<span class="faint">—</span>'}</td>
+        <td>${h.value !== undefined && h.value !== null ? num(toPos(h.value)) + " " + esc(posUnit()) + (cur.quoteBnb && unit !== "BNB" ? `<div class="faint">${num(h.value)} ${esc(unit)}</div>` : "") + usdOf(h.value) : has ? (cur.stage === "inner" ? "—" : "外盘按卖出报价") : "—"}</td>
+        <td>${cv ? (cv.approx ? "≈" : "") + num(cv.invested) + " " + esc(cv.unit) + (cv.received ? `<div class="faint">卖回 ${num(cv.received)} ${esc(cv.unit)}</div>` : "") : "—"}</td>
+        <td>${p ? `<span class="${p.v >= 0 ? "up" : "down"}">${p.approx ? "≈" : ""}${p.v >= 0 ? "+" : ""}${num(p.v)}<div>${p.v >= 0 ? "+" : ""}${p.p.toFixed(1)}%</div></span>` : '<span class="faint">—</span>'}</td>
         <td class="acts">${has ? `<button data-asell="50" data-acct="${k}" ${dis}>卖 50%</button><button data-asell="100" data-acct="${k}" ${dis}>清仓</button>` : ""}</td></tr>`;
     });
     const n = Object.keys(cur.holdings).length;
-    const total = n > 1 ? `<tr class="sum"><td><b>合计</b></td><td>${num(tTok)}</td><td>${hasVal ? num(tVal) + " " + esc(unit) + usdOf(tVal) : "—"}</td><td>${tInv ? num(tInv) + (tRec ? `<div class="faint">卖回 ${num(tRec)}</div>` : "") : "—"}</td>
+    const total = n > 1 ? `<tr class="sum"><td><b>合计</b></td><td>${num(tTok)}</td><td>${hasVal ? num(tVal) + " " + esc(posUnit()) : "—"}</td><td>${tInv ? num(tInv) + " " + esc(tUnit) + (tRec ? `<div class="faint">卖回 ${num(tRec)} ${esc(tUnit)}</div>` : "") : "—"}</td>
       <td>${hasPnl ? `<span class="${tPnl >= 0 ? "up" : "down"}">${tPnl >= 0 ? "+" : ""}${num(tPnl)}${tInv ? `<div>${tPnl >= 0 ? "+" : ""}${((tPnl / tInv) * 100).toFixed(1)}%</div>` : ""}</span>` : "—"}</td><td></td></tr>` : "";
     $("tabbody").innerHTML = n ? `<table class="num allpos"><thead><tr><th>钱包</th><th>持有</th><th>现值</th><th>成本</th><th>盈亏</th><th></th></tr></thead><tbody>${rows.join("")}${total}</tbody></table>
-      <div class="more faint" style="cursor:default">盈亏 = 现值 + 已卖回 − 累计买入;成本按交易记录算,底池币不是 BNB 的美元按现价折算</div>`
+      <div class="more faint" style="cursor:default">盈亏 = 现值 + 已卖回 − 累计买入,都折成 BNB:买卖时实际花掉 / 收回的 BNB 按当时那笔兑换算(带 ≈ 的部分按现价),现值按底池币现价算</div>`
       : '<div class="empty">还没有登录的钱包</div>';
     document.querySelectorAll("#tabbody [data-asell]").forEach((b) => (b.onclick = () => order("sell", b.dataset.asell, b.dataset.acct)));
   }
@@ -1048,7 +1082,7 @@ function startStream() {
   es.onerror = async () => {
     esOk = false; renderLiveDot();
     // 令牌换过:重新拿令牌再连;其他情况 EventSource 会自己重连
-    if (es.readyState === 2 && (await refreshToken())) setTimeout(startStream, 1000);
+    if (es.readyState === 2 && (window.TP_PUBLIC || (await refreshToken()))) setTimeout(startStream, window.TP_PUBLIC ? 5000 + Math.random() * 10000 : 1000);
   };
   es.onmessage = (m) => { let ev; try { ev = JSON.parse(m.data); } catch { return; } onLive(ev); };
 }
@@ -1070,7 +1104,7 @@ function onLive(ev) {
     scanIdxAt = 0; loadScanIdx();   // 左侧扫链马上带上新盘
   }
   if (ev.type === "graduate") { scanIdxAt = 0; loadScanIdx(); }
-  if (ev.type === "graduate" && cur && ev.ca === cur.ca.toLowerCase()) toast(`${cur.symbol} 毕业了,已上外盘`, "ok");
+  if (ev.type === "graduate" && cur && ev.ca === cur.ca.toLowerCase()) { toast(`${cur.symbol} 毕业了,已上外盘`, "ok"); load(cur.ca, { quiet: true }); }
   // 自己的成交:3 秒后刷新持仓;20 秒后再刷一次(币安交易记录收录有延迟,成本要等它)
   if (ev.type === "trade" && ev.trader && mine[ev.trader]) { clearTimeout(walT); walT = setTimeout(() => loadWallets(true), 3000); clearTimeout(walT2); walT2 = setTimeout(() => loadWallets(true), 20000); }
   if (!cur || !ev.ca || ev.ca !== cur.ca.toLowerCase()) return;
@@ -1343,7 +1377,7 @@ function renderTrade() {
   document.querySelectorAll("#acctSeg button[data-v]").forEach((b) => (b.onclick = () => { ui.acct = b.dataset.v; try { localStorage.setItem("acct", ui.acct); } catch {} renderTrade(); schedulePreview(); }));
   document.querySelectorAll(".side-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.v === ui.side));
   $("buyBox").hidden = ui.side !== "buy"; $("sellBox").hidden = ui.side !== "sell";
-  const c = caps(), d = cur, unit = unitOf(d?.quote), dis = !d || running || !connected().length;
+  const c = caps(), d = cur, unit = unitOf(d?.quote), dis = !d || running || (!connected().length && !window.TP_PUBLIC);   // 公开网页版:按钮可点,点了提示需要登录
   $("pctGrp").hidden = d ? !c.pct : true;
   $("bnbGrp").hidden = d ? !c.bnb : false;
   $("pctBtns").innerHTML = [["1pct", "1%", d?.cost1pct, '<kbd class="k">空格+W</kbd>'], ["half", "0.5%", d?.costHalfPct, ""]].map(([a, l, cost, k]) => `<button class="q" data-a="buy" data-arg="${a}" ${dis ? "disabled" : ""}>${l}${k}<small>${cost ? "≈ " + num(cost) + " " + esc(unit) : "按代币数量"}</small></button>`).join("");
@@ -1412,11 +1446,11 @@ function renderPos() {
   const d = cur, unit = unitOf(d.quote), dis = running;
   const ks = Object.keys(d.holdings).filter((k) => (d.holdings[k].tokens || d.holdings[k].shares) > 0);
   $("posBox").hidden = false;
-  $("posUnit").textContent = ks.length ? `单位 ${unit}` : "";
+  $("posUnit").textContent = ks.length ? `单位 ${posUnit()}` : "";
   const bindAT = () => { const x = $("atOn"); if (x) x.onchange = () => toggleAT(x.checked); };
   if (!ks.length) { $("posMini").innerHTML = atHtml() + '<div class="faint" style="font-size:12px">这个币还没有持仓</div>'; bindAT(); return; }
   $("posMini").innerHTML = atHtml() + ks.map((k) => {
-    const h = d.holdings[k], c = d.costs?.[k], p = pnlOf(k);
+    const h = d.holdings[k], c = d.costs?.[k], p = pnlOf(k), cv = costView(c);
     let rb = "", rbDis = true, rbPct = null;
     if (p && p.net <= 0) rb = "已回本(卖回的已超过投入)";
     else if (p && p.value > 0) {
@@ -1426,9 +1460,9 @@ function renderPos() {
       rbPct = Math.max(1, need);
     } else rb = h.value === undefined ? "外盘没有现值,算不了回本" : "没有买入记录,算不了回本";
     return `<div class="acct"><div class="kv"><b>账号 ${k}</b><span class="num">${h.shares !== undefined ? num(h.shares) + " 份" : num(h.tokens) + " 个"}${h.pctOfSupply ? " · " + h.pctOfSupply + "%" : ""}</span></div>
-      <div class="big num">${p ? `<span class="${p.v >= 0 ? "up" : "down"}">${p.v >= 0 ? "+" : ""}${num(p.v)} <small>${p.v >= 0 ? "+" : ""}${p.p.toFixed(1)}%</small></span>` : '<span class="faint">盈亏 —</span>'}</div>
-      <div class="kv"><span>现值</span><b class="num">${h.value !== undefined && h.value !== null ? num(h.value) : "—"}</b></div>
-      <div class="kv"><span>累计买入 / 卖回</span><b class="num">${c ? num(c.invested ?? c.cost) + " / " + num(c.received || 0) : "—"}</b></div>
+      <div class="big num">${p ? `<span class="${p.v >= 0 ? "up" : "down"}" ${p.approx ? 'title="部分成本按底池币现价折算"' : ""}>${p.approx ? "≈" : ""}${p.v >= 0 ? "+" : ""}${num(p.v)} <small>${p.v >= 0 ? "+" : ""}${p.p.toFixed(1)}%</small></span>` : '<span class="faint">盈亏 —</span>'}</div>
+      <div class="kv"><span>现值</span><b class="num">${h.value !== undefined && h.value !== null ? num(p ? p.value : toPos(h.value)) : "—"}</b></div>
+      <div class="kv"><span>累计买入 / 卖回</span><b class="num">${cv ? (cv.approx ? "≈" : "") + num(cv.invested) + " / " + num(cv.received) + (cv.unit !== posUnit() ? " " + esc(cv.unit) : "") : "—"}</b></div>
       <div class="btns">${["25", "50", "75", "100"].map((v) => `<button data-sell="${v}" data-acct="${k}" ${dis ? "disabled" : ""}>${v === "100" ? "清仓" : v + "%"}</button>`).join("")}<button data-sell="10" data-acct="${k}" ${dis ? "disabled" : ""}>10%</button>
         <button class="rb" ${rbDis ? "disabled" : `data-sell="${rbPct}" data-acct="${k}"`}>${rb}</button></div>
       ${d.stage === "outer" && h.tokens > 0 ? `<button class="xferbtn" data-xfer="${k}" ${dis ? "disabled" : ""}>转出到地址…</button><div class="xferbox" id="xf${k}" hidden></div>` : ""}</div>`;
@@ -1515,16 +1549,25 @@ function schedulePreview() {
 
 function askConfirm(title, body, extraHtml = "") {
   return new Promise((resolve) => {
-    $("cfT").textContent = title; $("cfB").textContent = body; $("confirm").hidden = false;
+    const box = $("confirm");
+    $("cfT").textContent = title; $("cfB").textContent = body; box.hidden = false;
     let qx = $("cfQ"); if (!qx) { qx = document.createElement("div"); qx.id = "cfQ"; qx.className = "qrows"; $("cfB").after(qx); }
     qx.innerHTML = extraHtml; qx.hidden = !extraHtml;
-    pendingConfirm = (v) => { $("confirm").hidden = true; pendingConfirm = null; resolve(v); };
+    // 确认框平时在右边交易栏里;账户总览 / 设置页交易栏是收起的,看不见 —— 这时临时放到页面正中的弹窗里,确认完再放回去
+    let home = null;
+    if (!box.offsetParent) {
+      home = { parent: box.parentNode, next: box.nextSibling };
+      const m = document.createElement("div"); m.className = "modal cfmodal"; m.id = "cfModal";
+      document.body.appendChild(m); m.appendChild(box);
+    }
+    pendingConfirm = (v) => { box.hidden = true; if (home) { home.parent.insertBefore(box, home.next); $("cfModal")?.remove(); } pendingConfirm = null; resolve(v); };
     $("cfYes").onclick = () => pendingConfirm(true); $("cfNo").onclick = () => pendingConfirm(false);
     // 不把焦点放到「确认」上:快捷键是按住空格触发的,松开空格会点中有焦点的按钮。确认用回车或鼠标
     document.activeElement?.blur?.();
   });
 }
 async function order(action, arg, acctOverride) {
+  if (window.TP_PUBLIC) return window.tpNeedLogin();   // 公开网页版:下单要登录
   if (!cur || running || pendingConfirm) return;   // 确认框开着时不叠第二单
   if (action === "buy" && !["1pct", "half"].includes(arg) && !/^p\d+(\.\d{1,4})?$/.test(arg) && !(/^\d+(\.\d{1,8})?$/.test(arg) && Number(arg) > 0)) { toast("BNB 数量不对", "err"); return; }
   const acct = acctOverride ?? ui.acct;
@@ -1810,7 +1853,7 @@ function renderMiniScan() {
     const sub = msMode === "out" ? `毕业 ${msAge(t.graduatedAt) || "—"}` : msAge(t.createdAt) ? `${msAge(t.createdAt)}前` : "";
     return `<div class="msrow ${t.ca === curCa ? "on" : ""}" data-ca="${esc(t.ca)}" title="${esc(msTitle(t))}">
       ${logo(t.ca, t.symbol)}
-      <div class="nm"><div class="r1"><b>${esc(t.symbol ?? "?")}</b>${msMark(t)}${sub ? `<small>${esc(sub)}</small>` : ""}</div><div class="mtags">${msTags(t)}</div></div>
+      <div class="nm"><div class="r1"><b>${esc(t.symbol ?? "?")}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</div><div class="mtags">${msMark(t)}${msTags(t)}</div></div>
       <div class="rt"><span class="num">${mc ? "$" + mcFmt(mc) : "—"}</span>${msMode === "out" ? `<span class="faint">${t.holders ? t.holders + " 人" : ""}</span>` : `<span class="msbar"><i style="width:${Math.max(2, Math.min(100, p))}%"></i></span>`}</div>
     </div>`;
   }).join("") : Object.keys(scanIdx || {}).length ? '<div class="empty">暂无</div>' : SKEL(3, "tall");
@@ -1824,6 +1867,21 @@ let pfSel = "all";
 // 左侧持仓第二行用的平台简称
 const HPLAT = { four: "four", gangv1: "Gang", gangv2: "V2", gangv3: "V3", idagent: "Flap", flapportal: "Flap 门槛", dex: "DEX" };
 try { pfSel = localStorage.getItem("pf") || "all"; } catch {}
+// 左侧持仓 / 账户总览:两个号合计的现值和剩余成本。能折成 BNB 的按 BNB(t.bnb:后端按买卖时实际兑换的汇率算成本),否则按底池币
+function aggPos(t) {
+  const ks = Object.keys(t.balances ?? {}).filter((k) => t.balances[k]);
+  const has = (x) => x !== null && x !== undefined;
+  // 现值:每个有现值的号都加上;成本和涨跌只用既有现值又有成本的号(不然百分比分子分母对不上)
+  if (ks.some((k) => has(t.bnb?.[k]?.value))) {
+    let v = 0, pv = 0, pc = 0, approx = false;
+    for (const k of ks) { const b = t.bnb?.[k]; if (!b || !has(b.value)) continue; v += b.value; if (b.cost > 0) { pv += b.value; pc += b.cost; approx ||= b.approx; } }
+    return { v, c: pc || null, p: pc ? (pv / pc - 1) * 100 : null, unit: "BNB", approx };
+  }
+  // 退回底池币口径:成本也得是用底池币付的才能比
+  let v = 0, pv = 0, pc = 0, ok = false;
+  for (const k of ks) { const val = t.values?.[k], cost = t.costs?.[k]; if (!has(val)) continue; v += val; ok = true; if (cost?.cost > 0 && unitOf(cost.unit) === unitOf(t.quote)) { pv += val; pc += cost.cost; } }
+  return ok ? { v, c: pc || null, p: pc ? (pv / pc - 1) * 100 : null, unit: unitOf(t.quote), approx: false } : { v: null, c: null, p: null, unit: unitOf(t.quote), approx: false };
+}
 function renderHoldings() {
   if (!wallets) return;
   const all = wallets.tokens, cnt = (k) => k === "all" ? all.length : all.filter((t) => pfOf(t) === k).length;
@@ -1833,13 +1891,11 @@ function renderHoldings() {
   const list = pfSel === "all" ? all : all.filter((t) => pfOf(t) === pfSel);
   $("hlist").innerHTML = list.length ? list.map((t) => {
     // 两个号合计现值和成本,算合计涨跌
-    let v = 0, c = 0, ok = false;
-    for (const k of ["1", "2"]) { const val = t.values?.[k], cost = t.costs?.[k]; if (val !== undefined && val !== null && cost?.cost > 0) { v += val; c += cost.cost; ok = true; } }
-    const p = ok ? (v / c - 1) * 100 : null;
+    const a = aggPos(t), ok = a.v !== null, v = a.v, p = a.p;
     const accts = ["1", "2"].filter((k) => t.balances[k]).join("+");
     const st = t.stage === "inner" ? "内盘" : "外盘";
-    return `<div class="hrow" data-ca="${esc(t.ca)}" title="${esc(t.symbol ?? "")} · ${esc(t.platformLabel)} · ${st} · 底池币 ${esc(unitOf(t.quote))}">${logo(t.ca, t.symbol)}<div class="nm"><b>${esc(t.symbol ?? "?")}</b><span class="hmeta"><i class="pdot ${t.stage === "inner" ? "pd-in" : "pd-out"}"></i>${esc(HPLAT[t.platform] ?? t.platformLabel ?? "")} · ${esc(unitOf(t.quote))} · 号${accts}</span></div><div class="rt">${pct(p)}<div class="faint num">${ok ? num(v) + " " + esc(unitOf(t.quote)) : ""}</div></div></div>`;
-  }).join("") : '<div class="empty">没有持仓</div>';
+    return `<div class="hrow" data-ca="${esc(t.ca)}" title="${esc(t.symbol ?? "")} · ${esc(t.platformLabel)} · ${st} · 底池币 ${esc(unitOf(t.quote))}">${logo(t.ca, t.symbol)}<div class="nm"><b>${esc(t.symbol ?? "?")}</b><span class="hmeta"><i class="pdot ${t.stage === "inner" ? "pd-in" : "pd-out"}"></i>${esc(HPLAT[t.platform] ?? t.platformLabel ?? "")} · ${esc(unitOf(t.quote))} · 号${accts}</span></div><div class="rt">${pct(p)}<div class="faint num">${ok ? (a.approx ? "≈" : "") + num(v) + " " + esc(a.unit) : ""}</div></div></div>`;
+  }).join("") : wallets.accounts.length ? '<div class="empty">没有持仓</div>' : '<div class="empty">登录后显示持仓</div>';
   document.querySelectorAll(".hrow[data-ca]").forEach((r) => (r.onclick = () => load(r.dataset.ca)));
   renderSideSel();
 }
@@ -1894,6 +1950,7 @@ function applyWallets(d) {
 const connected = () => wallets ? wallets.accounts.map((a) => a.acct) : [];
 let loginPoll = null;
 async function openLogin(acct) {
+  if (window.TP_PUBLIC) return window.tpNeedLogin();   // 公开网页版:还不能在网页上登录
   $("loginModal").hidden = false; $("lmTitle").textContent = `登录账号 ${acct}`;
   $("lmQr").textContent = "生成中…"; delete $("lmQr").dataset.url; $("lmPair").textContent = ""; $("lmState").textContent = ""; $("lmOpen").removeAttribute("href");
   try {
@@ -1980,15 +2037,11 @@ function renderHome() {
   }
   const px = d.bnbUsd, usdTxt = (bnb) => (px && bnb !== null && bnb !== undefined ? "≈ $" + num(bnb * px, 2) : "");
   const totalBnb = d.accounts.reduce((a, x) => a + (x.bnb || 0), 0);
-  // 持仓:每个币两个号合计现值 / 剩余成本 / 盈亏(单位是各自的底池币)
-  const rows = d.tokens.map((t) => {
-    let v = 0, c = 0, ok = false;
-    for (const k of Object.keys(t.balances)) { const val = t.values?.[k], cost = t.costs?.[k]; if (val !== undefined && val !== null && cost?.cost > 0) { v += val; c += cost.cost; ok = true; } }
-    return { t, v: ok ? v : null, c: ok ? c : null, p: ok ? (v / c - 1) * 100 : null };
-  });
+  // 持仓:每个币两个号合计现值 / 剩余成本 / 盈亏(能折成 BNB 的按 BNB,否则按各自底池币)
+  const rows = d.tokens.map((t) => ({ t, ...aggPos(t) }));
   const inner = d.tokens.filter((t) => t.stage === "inner").length;
-  // BNB 计价的持仓能直接加总
-  const bnbHold = rows.filter((r) => r.v !== null && unitOf(r.t.quote) === "BNB").reduce((a, r) => a + r.v, 0);
+  // 按 BNB 算的持仓(含底池币折算的)能直接加总
+  const bnbHold = rows.filter((r) => r.v !== null && r.unit === "BNB").reduce((a, r) => a + r.v, 0);
   const pending = d.sessions.filter((s) => !s.connected);
   const keepSend = $("sendBox")?.contains(document.activeElement) ? $("sendBox") : null;   // 正在填转账就把那块原样搬过去
   const abn = (x) => (x === "AutoReject" ? "自动拒绝" : x === "NeedConfirmation" ? "需要确认" : x ?? "—");
@@ -1996,7 +2049,7 @@ function renderHome() {
     <div class="sumrow">
       <div class="sum"><div class="k">BNB 余额(${d.accounts.length} 个号合计)</div><div class="v num">${totalBnb.toFixed(4)} <small>${usdTxt(totalBnb)}</small></div></div>
       <div class="sum"><div class="k">持仓代币</div><div class="v num">${d.tokens.length}<small>内盘 ${inner} · 外盘 ${d.tokens.length - inner}</small></div></div>
-      <div class="sum"><div class="k">BNB 计价的持仓现值</div><div class="v num">${num(bnbHold)} <small>${usdTxt(bnbHold)}</small></div></div>
+      <div class="sum"><div class="k">持仓现值(折 BNB)</div><div class="v num">${num(bnbHold)} <small>${usdTxt(bnbHold)}</small></div></div>
       <div class="sum"><div class="k">BNB 价格</div><div class="v num">${px ? "$" + px.toFixed(2) : "—"}</div></div>
     </div>
     <div class="acards" id="secWallets">${d.accounts.map((a, ai) => {
@@ -2015,12 +2068,12 @@ function renderHome() {
       </div>`;
     }).join("")}</div>
     <div class="hcard">
-      <div class="t"><span>全部持仓(${d.tokens.length})· 点一行打开</span><span>现值 / 成本按各自底池币计</span></div>
-      ${d.tokens.length ? `<table class="num"><thead><tr><th>代币</th><th>状态</th><th>现值</th><th>成本</th><th>盈亏</th><th>美元 成本 → 现值</th><th>美元盈亏</th></tr></thead><tbody>${rows.map(({ t, v, c, p }) => `<tr class="go" data-ca="${esc(t.ca)}" title="${esc(d.accounts.map((a) => `账号 ${a.acct}: ${t.balances[a.acct] ? num(t.balances[a.acct]) : "—"}`).join(" · "))}">
+      <div class="t"><span>全部持仓(${d.tokens.length})· 点一行打开</span><span>现值 / 成本折成 BNB(成本按买入时实际花的 BNB)</span></div>
+      ${d.tokens.length ? `<table class="num"><thead><tr><th>代币</th><th>状态</th><th>现值</th><th>成本</th><th>盈亏</th><th>美元 成本 → 现值</th><th>美元盈亏</th></tr></thead><tbody>${rows.map(({ t, v, c, p, unit, approx }) => `<tr class="go" data-ca="${esc(t.ca)}" title="${esc(d.accounts.map((a) => `账号 ${a.acct}: ${t.balances[a.acct] ? num(t.balances[a.acct]) : "—"}`).join(" · "))}">
         <td><div class="tk">${logo(t.ca, t.symbol)}<div><b>${esc(t.symbol ?? "?")}</b><div class="faint" style="font-size:11px">${esc(t.platformLabel)}</div></div></div></td>
         <td>${t.stage === "inner" ? `<span class="up">内盘</span>${t.progress !== undefined && t.progress !== null ? ` <span class="faint">${Number(t.progress).toFixed(1)}%</span>` : ""}` : '<span style="color:var(--acc)">外盘</span>'}</td>
-        <td>${v !== null ? num(v) + " " + esc(unitOf(t.quote)) : '<span class="faint">—</span>'}</td>
-        <td>${c !== null ? num(c) : '<span class="faint">—</span>'}</td>
+        <td>${v !== null ? num(v) + " " + esc(unit) : '<span class="faint">—</span>'}</td>
+        <td>${c !== null ? (approx ? "≈" : "") + num(c) : '<span class="faint">—</span>'}</td>
         <td>${pct(p)}</td>${usdCells(t)}</tr>`).join("")}</tbody></table>` : '<div class="empty">还没有持仓。粘贴一个 CA 开始</div>'}
     </div>
     <div id="sendBox"></div>
@@ -2163,7 +2216,8 @@ document.addEventListener("keydown", (e) => {
   } else if (e.code === "KeyF") { e.preventDefault(); order("sell", "100"); }
 });
 document.addEventListener("keydown", (e) => {
-  if (pendingConfirm && e.key === "Enter") { e.preventDefault(); pendingConfirm(true); }
+  // 回车只在确认框真的看得见时才算「确认」(看不见的确认框绝不能被回车触发)
+  if (pendingConfirm && e.key === "Enter" && $("confirm").offsetParent) { e.preventDefault(); pendingConfirm(true); }
   else if (pendingConfirm && e.key === "Escape") pendingConfirm(false);
   else if (e.key === "/" && !e.target.closest?.("input")) { e.preventDefault(); $("ca").focus(); }
 });
@@ -2193,8 +2247,10 @@ if (pre && /^0x[0-9a-fA-F]{40}$/.test(pre)) load(pre);
 // 自动刷新:成交 10 秒,代币数据 20 秒,钱包 60 秒(下单中不刷)
 // 有实时推送时,成交 / K 线靠推送更新;下面的定时刷新只是兜底(推送断开时更勤一点)
 setInterval(() => { if (cur && !running && !document.hidden) loadTrades(); }, 30000);
-setInterval(() => { if (cur && cv.src === "own" && !document.hidden && !esOk) loadHistory(); }, 8000);
-setInterval(() => { if (cur && cv.src === "own" && !document.hidden && esOk) loadHistory(); }, 45000);
+setInterval(() => { if (cur && chartSrc() === "own" && !document.hidden && !esOk) loadHistory(); }, 8000);
+// 有实时推送时:内盘成交会推过来,45 秒对一次账;外盘(PancakeSwap)成交不走推送,15 秒拉一次
+let histTick = 0;
+setInterval(() => { histTick++; if (cur && chartSrc() === "own" && !document.hidden && esOk && (cur.stage === "outer" || histTick % 3 === 0)) loadHistory(); }, 15000);
 startStream();
 loadLists().then(() => loadTicker(true)); loadScanIdx();
 setInterval(() => { if (!document.hidden) { loadScanIdx(); loadTicker(); } }, 30000);
