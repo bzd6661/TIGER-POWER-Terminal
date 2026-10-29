@@ -25,7 +25,7 @@ const open = () => { if (process.env.AGENTBUY_NO_OPEN === "1") return console.lo
 const npm = (args) => spawnSync(win ? "npm.cmd" : "npm", args, { cwd: ROOT, stdio: "inherit", shell: win }).status === 0;
 
 console.log(`\n${HELPER ? "TIGER POWER 本机助手" : "TIGER POWER Terminal"} · 启动检查\n`);
-// 能不能连上币安(登录、下单都要用;中国大陆等网络需要代理)。用子进程测,这样刚装好的依赖(代理要用)也能用上
+// 能不能连上币安(登录、下单都要用;连不上时需要代理)。用子进程测,这样刚装好的依赖(代理要用)也能用上
 function netCheck() {
   const probe = `import "./env.mjs"; import { getProxy } from "./proxy.mjs";
 const t0 = Date.now(); const p = getProxy();
@@ -36,7 +36,7 @@ console.log(JSON.stringify({ ok, proxy: p, ms: Date.now() - t0 }));`;
   if (res?.ok) ok(`能连上币安${res.proxy ? `(走代理 ${res.proxy})` : ""}`);
   else {
     warn(`连不上币安服务器(www.binance.com)${res?.proxy ? `,当前代理 ${res.proxy} 也不通` : ""} —— 登录和下单都会失败`);
-    console.log(`    中国大陆需要开代理:打开 Clash / v2rayN 等软件的「系统代理」(${NAME}会自动用上),`);
+    console.log(`    需要开代理:在 Clash / v2rayN 等软件里打开 TUN 模式(虚拟网卡),或者打开「系统代理」(${NAME}会自动用上),`);
     console.log("    或者在项目根目录 .env 里加一行 HTTPS_PROXY=http://127.0.0.1:端口(Clash 一般 7890,v2rayN 一般 10809)。");
   }
 }

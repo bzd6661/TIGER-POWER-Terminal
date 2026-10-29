@@ -48,13 +48,14 @@ npm i -g @gangfun/cli
 CreateObject("WScript.Shell").Run "wscript ""D:\agentbuy\panel\daemon.vbs""", 0, False
 ```
 
-### 登录报 Connect Timeout / 连不上币安(中国大陆网络)
+### 登录报 Connect Timeout / 连不上币安
 
-登录、下单都要连 `www.binance.com`。中国大陆的普通 DNS 会把它解析到假地址(比如 156.233.67.243),扫码登录就会报 `Connect Timeout Error`——浏览器能打开币安是因为走了代理或「安全 DNS」,而命令行程序默认两样都不用。
+登录、下单都要连 `www.binance.com`。有些网络的普通 DNS 会把它解析到假地址(比如 156.233.67.243),扫码登录就会报 `Connect Timeout Error`——浏览器能打开币安是因为走了代理或「安全 DNS」,而命令行程序默认两样都不用。
 
 **面板已经自动处理 DNS 污染**:币安的域名改用阿里 / 腾讯的加密 DNS(DoH)解析,多数情况直接就能登录。如果还是连不上(说明连真实地址也被拦了),再开代理:
 
-- **最简单**:打开 Clash / v2rayN 等代理软件的 **「系统代理」**,面板 30 秒内会自动用上,不用重启。
+- **最省事**:打开代理软件的 **TUN 模式**(虚拟网卡;Clash 里叫「TUN 模式」,v2rayN 里叫「启用 Tun」),所有程序都会走代理,登录一般就好了。
+- **或者**:打开 Clash / v2rayN 等代理软件的 **「系统代理」**,面板 30 秒内会自动用上,不用重启。
 - **或者手动指定**:在项目根目录的 `.env` 里加一行 `HTTPS_PROXY=http://127.0.0.1:端口`(Clash 一般是 7890,v2rayN 一般是 10809),然后重新双击 `start.cmd`。
 
 双击 `start.cmd` 时会自动测一次能不能连上币安,并告诉你现在走没走代理。

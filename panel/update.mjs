@@ -1,5 +1,5 @@
 // 新版本提醒:每 6 小时看一次 GitHub 上的 version.json,有「重大更新」就在页面上提示怎么更新。
-//   本机版本:项目根目录的 version.json。远端:按顺序试 GitHub raw → jsDelivr(中国大陆一般能访问)。
+//   本机版本:项目根目录的 version.json。远端:按顺序试 GitHub raw → jsDelivr(GitHub 打不开时一般能访问)。
 //   majorBuild = 最近一次重大更新的版本号;远端的 majorBuild 比本机 build 新才提示(跳过了几个版本也能提示到)。
 //   只读一个公开的 JSON,不下载、不执行任何代码;更新由你自己做(git pull 或下载压缩包)。
 //   .env 设 AGENTBUY_NO_UPDATE_CHECK=1 可以关掉。

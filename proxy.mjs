@@ -1,4 +1,4 @@
-// 代理:中国大陆等网络连不上 www.binance.com(登录、下单都要用),需要走代理。
+// 代理:网络连不上 www.binance.com(登录、下单都要用),需要走代理。
 //   Node 不会自动用系统代理,所以这里统一处理,按顺序:
 //   1. .env / 环境变量里的 HTTPS_PROXY(或 HTTP_PROXY / ALL_PROXY),比如 http://127.0.0.1:7890(Clash)、http://127.0.0.1:10809(v2rayN)
 //   2. 没配就读 Windows 系统代理(Clash / v2rayN 打开「系统代理」时会设置)
@@ -28,7 +28,7 @@ let undici = null;
 try { undici = await import("undici"); } catch { /* 没装 undici:代理不生效(npm install 会装上) */ }
 
 // ---------- 不走代理时:币安的域名改用加密 DNS(DoH)解析 ----------
-// 中国大陆的普通 DNS 会把 www.binance.com 解析到假地址(比如土耳其的 156.233.67.243),连接直接超时;
+// 有些网络的普通 DNS 会把 www.binance.com 解析到假地址(比如土耳其的 156.233.67.243),连接直接超时;
 // 浏览器能上是因为走了代理或「安全 DNS」。这里对币安相关域名改问阿里 / 腾讯的 DoH(国内能访问、答案是真的 CloudFront 地址),
 // 其他域名照常用系统 DNS。查不到就退回系统 DNS。
 import { lookup as sysLookup } from "node:dns";
