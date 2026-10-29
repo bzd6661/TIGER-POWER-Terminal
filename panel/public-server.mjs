@@ -147,6 +147,15 @@ function page(file) {
   return html;
 }
 const STATIC = { "/fmt.js": "fmt.js", "/icons.js": "icons.js", "/i18n.js": "i18n.js", "/public.js": "public.js", "/vendor/lightweight-charts.js": "vendor/lightweight-charts.js" };
+// 图文教程 /guide:独立页面,不用公开模式脚本(没有钱包 / 下单),只要英文翻译;截图在 panel/guide/*.webp
+function guidePage() {
+  if (pageCache.has("guide") && process.env.NODE_ENV === "production") return pageCache.get("guide");
+  const html = readFileSync(here("./guide.html"), "utf8").replace("<script src=\"/i18n.js\"></script>", `<script src="/i18n.js?v=${ver("i18n.js")}"></script>`)
+    // 截图地址也带内容指纹:重拍同名截图后,浏览器和 Cloudflare 边缘(缓存一天)马上换新的
+    .replace(/\/guide\/img\/([a-z0-9-]{1,40}\.webp)/g, (m, f) => { try { return `${m}?v=${ver("guide/" + f)}`; } catch { return m; } });
+  pageCache.set("guide", html);
+  return html;
+}
 
 const server = http.createServer(async (req, res) => {
   for (const [k, v] of Object.entries(SEC)) res.setHeader(k, v);
@@ -165,6 +174,15 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && path === "/" && ["ca", "go", "tip"].some((k) => url.searchParams.has(k))) { res.writeHead(302, { location: "/trade" + url.search, "cache-control": "no-store" }); return res.end(); }
     if (req.method === "GET" && PAGES[path]) { res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": CSP, "cache-control": "no-cache" }); return res.end(page(PAGES[path])); }
     if (req.method === "GET" && STATIC[path]) { res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" }); return res.end(readFileSync(here("./" + STATIC[path]))); }
+    if (req.method === "GET" && (path === "/guide" || path === "/guide/")) { res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": CSP, "cache-control": "no-cache" }); return res.end(guidePage()); }
+    // 教程截图:文件名只认小写字母 / 数字 / 横线(不会读到别的目录);一天缓存,Cloudflare 边缘也缓存
+    const gm = req.method === "GET" && path.match(/^\/guide\/img\/([a-z0-9-]{1,40}\.webp)$/);
+    if (gm) {
+      let img;
+      try { img = readFileSync(here("./guide/" + gm[1])); } catch { res.writeHead(404, { "cache-control": "no-store" }); return res.end(); }   // 404 不缓存:部署换代那几分钟缺图,不会被边缘记住
+      res.writeHead(200, { "content-type": "image/webp", "cache-control": "public, max-age=86400" });
+      return res.end(img);
+    }
     if (req.method === "GET" && (path === "/favicon.svg" || path === "/favicon.ico")) { res.writeHead(200, { "content-type": "image/svg+xml", "cache-control": "public, max-age=86400" }); return res.end(readFileSync(here("./favicon.svg"))); }
     const im = req.method === "GET" && path.match(/^\/img\/(0x[0-9a-f]{40})$/i);
     if (im) {

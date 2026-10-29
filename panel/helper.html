@@ -46,7 +46,7 @@
   .msg { color:var(--down); font-size:12px; text-align:center; }
   .go { display:block; text-align:center; padding:12px; border-radius:12px; background:var(--acc); color:#1a1300; font-weight:800; font-size:14px; text-decoration:none; }
   .go:hover { filter:brightness(1.08); }
-  .hint { color:var(--mute); font-size:12px; text-align:center; line-height:1.6; }
+  .hint { color:var(--mute); font-size:12px; text-align:center; line-height:1.6; } .hint a { color:var(--acc); }
   /* 已连接的网站:每个一行,能断开 */
   .links { background:var(--s1); border:1px solid var(--line); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
   .links .lh { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:2px 10px; font-weight:700; }
@@ -87,6 +87,7 @@
   <div class="msg" id="msg" hidden></div>
   <a class="go" href="https://tigerpower.online" target="_blank" rel="noopener">打开 tigerpower.online →</a>
   <div class="hint">网站上转账、改设置这类操作会在这里弹出批准框,这个页面开着才能批准</div>
+  <div class="hint"><a href="https://tigerpower.online/guide" target="_blank" rel="noopener">不会连?看图文教程 →</a></div>
 </main>
 <div class="modal" id="loginModal" hidden>
   <div class="mbox">

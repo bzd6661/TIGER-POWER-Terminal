@@ -300,7 +300,7 @@
 <div class="fpanel" id="fPanel" hidden></div>
 
 <div class="cols" id="colView">
-  <section class="colw" data-col="0"><div class="colh"><b><span data-ic="sprout"></span>新创建</b><span class="cnt" id="n0"></span><span class="faint" style="font-size:11px">2 小时内 · 进度 &lt; 30%</span><span class="pause">⏸ 已暂停(鼠标移开继续)</span></div><div class="colb" id="c0"></div></section>
+  <section class="colw" data-col="0"><div class="colh"><b><span data-ic="sprout"></span>新创建</b><span class="cnt" id="n0"></span><span class="faint" style="font-size:11px">进度 &lt; 30%</span><span class="pause">⏸ 已暂停(鼠标移开继续)</span></div><div class="colb" id="c0"></div></section>
   <section class="colw" data-col="1"><div class="colh"><b><span data-ic="fire"></span>即将打满</b><span class="cnt" id="n1"></span><span class="faint" style="font-size:11px">进度 ≥ 30%</span><span class="pause">⏸ 已暂停(鼠标移开继续)</span></div><div class="colb" id="c1"></div></section>
   <section class="colw" data-col="2"><div class="colh"><b><span data-ic="rocket"></span>已开盘</b><span class="cnt" id="n2"></span><span class="pause">⏸ 已暂停(鼠标移开继续)</span></div><div class="colb" id="c2"></div></section>
 </div>
@@ -551,9 +551,8 @@ function render(force = false) {
   $("blockInfo").textContent = nb ? `已屏蔽 ${nb} 个` : "";
   if (view.mode === "list") return renderList();
   const list = baseList();
-  const now = Date.now() / 1000;
-  const maxIdx = Math.max(-1, ...list.filter((t) => t.platform === "idagent").map((t) => t.index));
-  const isNew = (t) => !t.graduated && (t.progress ?? 0) < NEAR && (t.createdAt ? now - t.createdAt < 2 * 3600 : t.platform === "idagent" && t.index > maxIdx - 15);
+  // 新创建:没毕业、进度 < 30% 的都算(不限创建多久),按创建时间新的在前
+  const isNew = (t) => !t.graduated && (t.progress ?? 0) < NEAR;
   const cols = [
     list.filter(isNew).sort((a, b) => (b.createdAt ?? b.index ?? 0) - (a.createdAt ?? a.index ?? 0)),
     list.filter((t) => !t.graduated && (t.progress ?? 0) >= NEAR).sort((a, b) => b.progress - a.progress),

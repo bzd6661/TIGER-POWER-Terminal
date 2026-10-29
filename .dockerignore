@@ -11,3 +11,4 @@
 !panel/*.js
 !panel/*.svg
 !panel/vendor/
+!panel/guide/

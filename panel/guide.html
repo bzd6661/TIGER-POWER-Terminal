@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本机助手连接教程 · TIGER POWER</title>
+<meta name="description" content="一步一步把你电脑上的 TIGER POWER 本机助手连到 tigerpower.online:下载、启动、扫码登录、配对、批准。">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<script src="/i18n.js"></script>
+<style>
+  /* 网站上的图文教程(tigerpower.online/guide):本机助手从下载到连上网站、批准动钱操作。截图在 panel/guide/,是用测试钱包(假地址)拍的;
+     有中英两套的图写 data-en,页面按界面语言挑 */
+  :root {
+    --bg:#0a0c0f; --s1:#101318; --s2:#151920; --s3:#1b2029; --line:#1e232c; --line2:#2a313d;
+    --text:#e7eaf0; --mute:#8d96a7; --faint:#5b6372;
+    --up:#16c784; --down:#ea3943; --acc:#f0b90b;
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  html, body { margin:0; background:var(--bg); color:var(--text); font:14px/1.7 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  a { color:var(--acc); }
+  code { font-family:"JetBrains Mono", Consolas, monospace; background:var(--s2); border:1px solid var(--line); border-radius:6px; padding:1px 6px; font-size:12.5px; }
+  .top { position:sticky; top:0; z-index:5; height:52px; display:flex; align-items:center; gap:16px; padding:0 16px; border-bottom:1px solid var(--line); background:var(--s1); }
+  .brand { display:flex; align-items:center; gap:8px; font-weight:800; font-size:15px; letter-spacing:.5px; white-space:nowrap; color:var(--text); text-decoration:none; }
+  .brand .tmlogo { width:24px; height:24px; flex:none; display:block; }
+  .top .back { margin-left:auto; color:var(--mute); text-decoration:none; font-size:13px; white-space:nowrap; } .top .back:hover { color:var(--text); }
+  .wrap { max-width:880px; margin:0 auto; padding:28px 16px 60px; }
+  h1 { font-size:26px; margin:0 0 6px; }
+  .lead { color:var(--mute); margin:0 0 18px; }
+  .box { background:var(--s1); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:14px 0; }
+  .box h3 { margin:0 0 8px; font-size:15px; }
+  .box ul { margin:0; padding-left:20px; color:var(--mute); } .box li { margin:3px 0; }
+  .toc { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 4px; }
+  .toc a { text-decoration:none; color:var(--mute); background:var(--s2); border:1px solid var(--line); border-radius:999px; padding:3px 12px; font-size:12.5px; } .toc a:hover { color:var(--text); border-color:var(--line2); }
+  .step { display:grid; grid-template-columns:44px 1fr; gap:14px; margin:30px 0; scroll-margin-top:70px; }
+  .num { width:40px; height:40px; border-radius:50%; background:var(--acc); color:#1a1300; font-weight:800; font-size:18px; display:flex; align-items:center; justify-content:center; }
+  .step h2 { font-size:18px; margin:6px 0 6px; }
+  .step p { margin:6px 0; color:#c9ced8; }
+  .step .note { color:var(--mute); font-size:13px; }
+  .step .warn { color:#f6c75a; font-size:13px; }
+  .shots { display:flex; flex-direction:column; gap:12px; margin-top:12px; }
+  .shots.two { display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:start; }
+  figure { margin:0; }
+  figure img { display:block; width:100%; height:auto; border:1px solid var(--line2); border-radius:10px; background:var(--s1); cursor:zoom-in; }
+  figcaption { color:var(--faint); font-size:12px; margin-top:6px; }
+  .btnlink { display:inline-block; margin-top:6px; padding:7px 14px; border-radius:9px; background:var(--acc); color:#1a1300; font-weight:700; text-decoration:none; }
+  .faq h3 { font-size:14.5px; margin:16px 0 4px; }
+  .faq p { margin:0; color:var(--mute); }
+  .foot { margin-top:40px; padding-top:16px; border-top:1px solid var(--line); color:var(--faint); font-size:12.5px; display:flex; flex-wrap:wrap; gap:14px; }
+  .foot a { color:var(--mute); }
+  .zoom { position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.85); display:flex; align-items:center; justify-content:center; padding:16px; cursor:zoom-out; }
+  .zoom img { max-width:100%; max-height:100%; border-radius:10px; }
+  @media (max-width:640px) {
+    .step { grid-template-columns:1fr; gap:6px; }
+    .num { width:34px; height:34px; font-size:16px; }
+    .shots.two { grid-template-columns:1fr; }
+    h1 { font-size:22px; }
+  }
+</style>
+</head>
+<body>
+<div class="top">
+  <a class="brand" href="/"><svg class="tmlogo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="tmg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F8D33A"/><stop offset="1" stop-color="#E8890C"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#tmg)"/><path d="M5 10.5H14.5M9.75 10.5V23M18.5 23V10.5H23.25A3.5 3.5 0 0 1 23.25 17.5H18.5" fill="none" stroke="#1a1300" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>TIGER POWER</span></a>
+  <span class="nav"></span>
+  <a class="back" href="/">← 回到网站</a>
+</div>
+<main class="wrap">
+  <h1>本机助手连接教程</h1>
+  <p class="lead">用你自己电脑上的币安钱包,在 tigerpower.online 上看持仓、买卖。跟着下面 10 步做,大约 5 分钟。</p>
+
+  <div class="box">
+    <h3>开始前准备好</h3>
+    <ul>
+      <li>一台 Windows 电脑,用 Chrome 或 Edge 浏览器</li>
+      <li>Binance App 里开通 Agentic Wallet,并绑定 Agent ID(four / Gang / Flap 内盘都要求)</li>
+      <li>钱包设置里打开「开发者模式」和「允许交易所有代币」;「异常交易处理」建议设成「需要确认」</li>
+    </ul>
+  </div>
+
+  <div class="box">
+    <h3>安全说明</h3>
+    <ul>
+      <li>网站服务器上没有任何钱包;下单由你电脑上的本机助手签名,钱包登录只存在你自己的电脑上</li>
+      <li>你的钱包地址和余额只在你的浏览器和本机助手之间传,不发给网站服务器(除非你自己点开某个地址的交易人详情,或者把它加进追踪)</li>
+      <li>转账、打赏、改设置这类动钱的操作,要你在本机助手页面亲手点「批准」才执行</li>
+    </ul>
+  </div>
+
+  <div class="toc">
+    <a href="#s1">1 装 Node.js</a><a href="#s2">2 下载本机助手</a><a href="#s3">3 启动</a><a href="#s4">4 扫码登录</a><a href="#s5">5 连接网站</a>
+    <a href="#s6">6 允许本地网络</a><a href="#s7">7 看配对码</a><a href="#s8">8 填配对码</a><a href="#s9">9 连上了</a><a href="#s10">10 批准</a><a href="#faq">常见问题</a>
+  </div>
+
+  <section class="step" id="s1"><div class="num">1</div><div>
+    <h2>安装 Node.js(20 以上)</h2>
+    <p>本机助手用 Node.js 运行。打开 Node.js 官网,下载 LTS 版本,一路「下一步」装完。已经装过的跳过这步。</p>
+    <a class="btnlink" href="https://nodejs.org" target="_blank" rel="noopener">打开 nodejs.org →</a>
+  </div></section>
+
+  <section class="step" id="s2"><div class="num">2</div><div>
+    <h2>下载本机助手</h2>
+    <p>打开本机助手的 GitHub 页面,点绿色的「Code」按钮,再点「Download ZIP」。会用 git 的也可以直接 git clone。</p>
+    <a class="btnlink" href="https://github.com/bzd6661/TIGER-POWER-Helper" target="_blank" rel="noopener">打开 TIGER-POWER-Helper →</a>
+    <p class="note">本机助手只有几十个文件,不是完整版。已经装了完整版 TIGER-POWER-Terminal 的不用再下载:完整版自带本机助手。</p>
+    <div class="shots"><figure><img data-src="/guide/img/github-zip.webp" alt="GitHub 页面:Code → Download ZIP" loading="lazy"><figcaption>点「Code」→「Download ZIP」</figcaption></figure></div>
+  </div></section>
+
+  <section class="step" id="s3"><div class="num">3</div><div>
+    <h2>解压,双击 start.cmd</h2>
+    <p>在下载的压缩包上点右键 →「全部解压缩」,解压到一个固定的文件夹(不要在压缩包里直接双击)。进到有 start.cmd 的那一层(可能要再点进一层同名的 TIGER-POWER-Helper-main 文件夹),双击 start.cmd。</p>
+    <p>第一次会自动安装依赖,问你要不要安装币安钱包命令行(baw)时直接按回车。检查完窗口会自己关掉,浏览器自动打开本机助手页面,就说明启动好了;本机助手在后台运行。重启电脑后要用时再双击一次 start.cmd。</p>
+    <p class="note">双击时如果弹出「Windows 已保护你的电脑」,点「更多信息」→「仍要运行」;弹出「打开文件 - 安全警告」就点「运行」(本机助手的源码在 GitHub 上公开)。</p>
+    <div class="shots"><figure><img data-src="/guide/img/start-cmd.webp" alt="双击 start.cmd 后的启动检查" loading="lazy"><figcaption>示意图:第一次启动的检查过程(成功后窗口会自己关掉)</figcaption></figure></div>
+  </div></section>
+
+  <section class="step" id="s4"><div class="num">4</div><div>
+    <h2>在本机助手页面扫码登录钱包</h2>
+    <p>浏览器会自动打开本机助手页面 http://127.0.0.1:4400。点「扫码登录」,用 Binance App 扫码,并在 App 里确认。一次登录大约 48 小时有效,过期了再扫一次。</p>
+    <p class="note">二维码下面的「配对码」是币安登录用的,在 App 里核对就行;它不是第 7 步网站要填的 6 位配对码。</p>
+    <p class="note">账号 2 显示「没装」是正常的。想同时用两个币安账号,见本机助手说明里的<a href="https://github.com/bzd6661/TIGER-POWER-Helper#第二个账号可选" target="_blank" rel="noopener">「第二个账号」</a>。</p>
+    <div class="shots two">
+      <figure><img data-src="/guide/img/helper-home-zh.webp" data-en="/guide/img/helper-home-en.webp" alt="本机助手页面" loading="lazy"><figcaption>本机助手页面:点账号 1 的「扫码登录」</figcaption></figure>
+      <figure><img data-src="/guide/img/helper-qr-zh.webp" data-en="/guide/img/helper-qr-en.webp" alt="登录二维码" loading="lazy"><figcaption>用 Binance App 扫这个码(图里是测试用的假二维码)</figcaption></figure>
+    </div>
+  </div></section>
+
+  <section class="step" id="s5"><div class="num">5</div><div>
+    <h2>回到网站,点「连接本机助手」</h2>
+    <p>在运行本机助手的同一台电脑上打开 tigerpower.online。点右上角的登录、或者任何买卖按钮,会弹出「登录钱包」窗口,点「连接本机助手」。</p>
+    <div class="shots"><figure><img data-src="/guide/img/web-dialog-zh.webp" data-en="/guide/img/web-dialog-en.webp" alt="网站的登录钱包窗口" loading="lazy"><figcaption>网站上的「登录钱包」窗口</figcaption></figure></div>
+  </div></section>
+
+  <section class="step" id="s6"><div class="num">6</div><div>
+    <h2>浏览器问「访问本地网络」时,点「允许」</h2>
+    <p>这是浏览器在问:能不能让这个网站连你电脑上的本机助手。点「允许」。</p>
+    <p class="note">不小心点了「屏蔽」:点地址栏左边的网站设置图标,把「本地网络访问」改成允许,再刷新页面。</p>
+    <div class="shots"><figure><img data-src="/guide/img/lna-zh.webp" data-en="/guide/img/lna-en.webp" alt="浏览器的本地网络访问提示" loading="lazy"><figcaption>示意图:不同版本浏览器的文字略有不同</figcaption></figure></div>
+  </div></section>
+
+  <section class="step" id="s7"><div class="num">7</div><div>
+    <h2>本机助手页面弹出 6 位配对码</h2>
+    <p>切回本机助手页面,右上角会弹出一个 6 位配对码,2 分钟内有效。</p>
+    <p class="warn">不是你自己在网站上点的「连接」,就别把这个码给任何人。</p>
+    <div class="shots"><figure><img data-src="/guide/img/helper-paircode-zh.webp" data-en="/guide/img/helper-paircode-en.webp" alt="本机助手页面上的配对码" loading="lazy"><figcaption>本机助手页面上的配对码</figcaption></figure></div>
+  </div></section>
+
+  <section class="step" id="s8"><div class="num">8</div><div>
+    <h2>把配对码填进网站,点「完成配对」</h2>
+    <p>回到网站,把 6 位配对码填进输入框,点「完成配对」。码过期了点「重新获取配对码」。</p>
+    <div class="shots"><figure><img data-src="/guide/img/web-code-zh.webp" data-en="/guide/img/web-code-en.webp" alt="在网站上填配对码" loading="lazy"><figcaption>填好配对码,点「完成配对」</figcaption></figure></div>
+  </div></section>
+
+  <section class="step" id="s9"><div class="num">9</div><div>
+    <h2>连上了</h2>
+    <p>网站右上角显示「本机钱包已连接」,就能看自己的持仓、一键买卖了。配对一次就行,以后打开网站会自动连接(本机助手要开着)。</p>
+    <p class="note">网站买入有额度:默认单笔最多 0.5 BNB(每个号分别算)、每天合计最多 2 BNB。在额度内买卖不用批准。</p>
+    <div class="shots"><figure><img data-src="/guide/img/web-connected-zh.webp" data-en="/guide/img/web-connected-en.webp" alt="网站上显示本机钱包已连接" loading="lazy"><figcaption>右上角「本机钱包已连接」</figcaption></figure></div>
+  </div></section>
+
+  <section class="step" id="s10"><div class="num">10</div><div>
+    <h2>动钱的操作,在本机助手页面点「批准」</h2>
+    <p>在网站上转账、打赏、改设置或网页额度、设置自动转出地址或打开自动转出、开或恢复真实跟单、解除地址锁定时,网站顶上会显示「等待本机助手批准」,本机助手页面弹出批准框。看清楚要做什么、收款地址是不是你自己的,再点「批准」。</p>
+    <p class="note">点「拒绝」或 120 秒没人点,这个操作就不执行。本机助手页面要开着才能批准。</p>
+    <div class="shots">
+      <figure><img data-src="/guide/img/web-waiting-zh.webp" data-en="/guide/img/web-waiting-en.webp" alt="网站上等待本机助手批准" loading="lazy"><figcaption>网站:等待本机助手批准</figcaption></figure>
+      <figure><img data-src="/guide/img/helper-approve-zh.webp" data-en="/guide/img/helper-approve-en.webp" alt="本机助手页面上的批准框" loading="lazy"><figcaption>本机助手页面:核对后点「批准」</figcaption></figure>
+    </div>
+  </div></section>
+
+  <div class="faq" id="faq">
+    <h2>常见问题</h2>
+    <h3>网站说「没检测到本机助手」</h3>
+    <p>确认本机助手在运行(浏览器能打开 http://127.0.0.1:4400),浏览器问「访问本地网络」时点了允许,而且网站和本机助手在同一台电脑上。</p>
+    <h3>网站说「本机助手太旧」</h3>
+    <p>下载最新的本机助手压缩包,解压覆盖到原来那个文件夹(.env、登录信息和 panel 里的数据不会被覆盖,助手会自己重启);用 git 的在原来的文件夹运行 git pull。然后刷新网站。如果解压到了新文件夹:先按本机助手说明里的「怎么停掉本机助手」停掉旧的,再双击新文件夹里的 start.cmd。</p>
+    <h3>我已经装了完整版 TIGER-POWER-Terminal</h3>
+    <p>完整版自带本机助手,直接用完整版连网站就行。两个都用 4400 端口,同时只能开一个。</p>
+    <h3>换了浏览器、清了浏览器数据</h3>
+    <p>配对是按浏览器记的,换了要重新配对一次(从第 5 步开始)。</p>
+    <h3>怎么断开</h3>
+    <p>网站右上角点「本机钱包已连接」→「断开连接」,只是这个浏览器不再用本机助手。要彻底作废这个浏览器的配对(比如担心浏览器被别人动过),在本机助手页面的「已连接的网站」里点「断开」。</p>
+    <h3>扫码登录报 Connect Timeout(中国大陆网络)</h3>
+    <p>本机助手会自动处理 DNS 污染;还是连不上的话,打开代理软件的「系统代理」,30 秒内自动生效。详见本机助手说明。</p>
+  </div>
+
+  <div class="foot">
+    <a href="https://github.com/bzd6661/TIGER-POWER-Helper" target="_blank" rel="noopener">本机助手(GitHub)</a>
+    <a href="https://github.com/bzd6661/TIGER-POWER-Terminal" target="_blank" rel="noopener">完整版(GitHub)</a>
+    <a href="https://x.com/tiger_web3" target="_blank" rel="noopener">作者推特 @tiger_web3</a>
+    <a href="/">回到 tigerpower.online</a>
+  </div>
+</main>
+<script>
+// 截图按界面语言给:有 data-en 的英文界面用英文截图;点图放大,点任意处 / Esc 关闭
+(() => {
+  const en = window.UI_LANG === "en";
+  for (const img of document.querySelectorAll("img[data-src]")) img.src = en && img.dataset.en ? img.dataset.en : img.dataset.src;
+  let z = null;
+  const close = () => { z?.remove(); z = null; };
+  document.addEventListener("click", (e) => {
+    const img = e.target.closest?.("figure img");
+    if (z) return close();
+    if (!img) return;
+    z = document.createElement("div"); z.className = "zoom";
+    const big = document.createElement("img"); big.src = img.currentSrc || img.src; big.alt = img.alt;
+    z.appendChild(big); document.body.appendChild(z);
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+})();
+</script>
+</body>
+</html>

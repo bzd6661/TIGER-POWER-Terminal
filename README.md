@@ -160,7 +160,7 @@ four 脚本没有 `--acct`,账号 2 用 `four2.cmd fourbuy <CA> <BNB>` / `four2.
 
 ## 五、网页版 tigerpower.online
 
-[tigerpower.online](https://tigerpower.online) 打开默认是扫链页,交易页在 `/trade`(以前分享的 `/?ca=…` 链接会自动跳过去;本地版 `http://127.0.0.1:4400` 首页还是交易页)。有两种用法:
+[tigerpower.online](https://tigerpower.online) 打开默认是扫链页(连接本机助手的图文教程:<https://tigerpower.online/guide>),交易页在 `/trade`(以前分享的 `/?ca=…` 链接会自动跳过去;本地版 `http://127.0.0.1:4400` 首页还是交易页)。有两种用法:
 
 - **只看数据**:不用装任何东西,扫链、代币页(K 线 / 成交 / 多空对决)、追踪都能用,不能下单。服务器上没有任何钱包。
 - **连接本机助手(在网站上下单,网站登录弹窗里也有这几步)**:在自己电脑上装「本机助手」。它是单独的小仓库 [TIGER-POWER-Helper](https://github.com/bzd6661/TIGER-POWER-Helper)(只带网站连钱包要用的文件;点 Code → Download ZIP 解压就行,不用装这个完整版):

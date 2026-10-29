@@ -12,7 +12,7 @@
   window.TP_PUBLIC = true;
   document.documentElement.classList.add("tp-public");
   const GH = "https://github.com/bzd6661/TIGER-POWER-Terminal";   // 完整本地版
-  const HELPER_ZIP = "https://github.com/bzd6661/TIGER-POWER-Helper/archive/refs/heads/main.zip";   // 本机助手:只有助手的小仓库,直接给 ZIP(不用会 git)
+  const HELPER_REPO = "https://github.com/bzd6661/TIGER-POWER-Helper";   // 本机助手:只有助手的小仓库;链到仓库页面,下载方法和用法都在它的 README 里
   const realFetch = window.fetch.bind(window);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const onReady = (f) => (document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", f, { once: true }) : f());
@@ -148,6 +148,7 @@
   .tp-lm .tp-how ol { margin:6px 0 0; padding-left:20px; }
   .tp-lm .tp-how li { margin-top:4px; }
   .tp-lm .tp-how li a { color:var(--acc, #f0b90b); white-space:nowrap; }
+  .tp-lm .tp-how .tp-guide { margin-left:10px; font-size:12px; font-weight:700; }
   @media (max-width:520px) { .tp-lm .tp-modes { grid-template-columns:1fr; } }
   .tp-apbar { position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:260; display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; box-sizing:border-box; max-width:calc(100vw - 32px); padding:10px 16px; background:var(--s1, #101318); border:1px solid var(--acc, #f0b90b); border-radius:10px; color:var(--text, #e7eaf0); font-size:13px; box-shadow:0 12px 32px rgba(0,0,0,.5); }
   .tp-apbar[hidden] { display:none; }
@@ -232,8 +233,8 @@
         <div>完整版本身也带本机助手,两个只开一个(都用 4400 端口)</div>
         <div>${link(GH, "下载完整版 →")}</div></div>
     </div>
-    <div class="tp-how"><b>本机助手模式怎么用</b><ol>
-      <li><span>装好 Node.js 20 以上,下载本机助手,解压后双击 start.cmd</span> ${link(HELPER_ZIP, "下载本机助手 →")}</li>
+    <div class="tp-how"><b>本机助手模式怎么用</b><a class="tp-guide" href="/guide" target="_blank" rel="noopener">看图文教程 →</a><ol>
+      <li><span>打开本机助手的页面,照说明安装:装好 Node.js 20 以上,下载本机助手,解压后双击 start.cmd</span> ${link(HELPER_REPO, "本机助手下载和使用说明 →")}</li>
       <li><span>本机助手页面会自动打开,用 Binance App 扫码登录钱包</span> ${link(HELPER_BASE + "/", "打开本机助手 →")}</li>
       <li>回到这个网站点「连接本机助手」。要用运行助手的同一台电脑;浏览器问「访问本地网络」时点允许</li>
       <li>本机助手页面会弹出 6 位配对码,填进来就连上了。配对一次就行,以后打开网站会自动连接</li>
@@ -258,7 +259,7 @@
       setTimeout(() => inp.focus(), 0);
     } else {   // none / old / err:连不上、太旧、或助手报错
       box.innerHTML = `<div class="err">${esc(name === "old" ? OLD_MSG : name === "none" ? NONE_MSG : msg)}</div>`;
-      row.innerHTML = btn("data-x", "知道了") + btn("data-go", "再试一次") + link(HELPER_ZIP, "下载本机助手 →");
+      row.innerHTML = btn("data-x", "知道了") + btn("data-go", "再试一次") + link("/guide", "看图文教程 →");   // 连不上 / 太旧:图文教程从下载讲到配对,里面也有本机助手的下载链接
     }
   }
   function setMsg(text, cls = "err") { const m = dlg.querySelector(".tp-msg"); if (m) { m.className = "tp-msg " + cls; m.textContent = text; } }
