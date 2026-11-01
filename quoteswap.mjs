@@ -7,6 +7,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { ethers } from "ethers";
+import { bscProvider } from "./rpc.mjs";
+import { MARKET_CLOSED, pancakeSellToBnb } from "./v3swap.mjs";
 
 export const BNB = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export const USDT = "0x55d398326f99059fF775485246999027B3197955";
@@ -99,7 +101,16 @@ export async function bnbToToken({ baw, wallet, token, bnbAmt, slip = 3, balance
 }
 
 // 底池币 → BNB;amountWei 是 bigint。返回换到的 BNB(bigint,按订单)
-export async function tokenToBnb({ baw, wallet, token, amountWei, decimals = 18, slip = 3, balanceOf, log, sym = "底池币" }) {
+//   币安说休市(Ondo 股票代币在美股休市时)、钱还没动的,改走 Pancake V3 池子(v3swap.mjs)
+export async function tokenToBnb(o) {
+  try { return await tokenToBnbBinance(o); }
+  catch (e) {
+    if (!MARKET_CLOSED.test(e.message) || /第一步已经换成了/.test(e.message)) throw e;
+    const net = ethers.Network.from(56);
+    return pancakeSellToBnb({ ...o, provider: o.provider ?? bscProvider(net, { staticNetwork: net }) });
+  }
+}
+async function tokenToBnbBinance({ baw, wallet, token, amountWei, decimals = 18, slip = 3, balanceOf, log, sym = "底池币" }) {
   const qty = ethers.formatUnits(amountWei, decimals);
   const via = await routeOf(baw, token, slip);
   if (via === "direct") return (await swapWait({ baw, wallet, from: token, to: BNB, qty, slip, balanceOf, label: `${sym}→BNB`, log })).got;

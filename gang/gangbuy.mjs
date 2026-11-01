@@ -9,10 +9,11 @@ import { makeGang } from "./gangcore.mjs";
 import { checkLiquid } from "../liq.mjs";
 import { perBnb, bnbToToken, quoteDecimals } from "../quoteswap.mjs";
 import { ethers } from "ethers";
+import { bscProvider } from "../rpc.mjs";
 
 const BNB = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 provider.pollingInterval = 300;   // 等回执时每 0.3 秒查一次(ethers 默认 4 秒)
 const erc20 = new ethers.Interface(["function balanceOf(address) view returns (uint256)"]);
 const t0 = Date.now();

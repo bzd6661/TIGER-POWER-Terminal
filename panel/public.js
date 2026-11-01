@@ -14,6 +14,9 @@
   const GH = "https://github.com/bzd6661/TIGER-POWER-Terminal";   // 完整本地版
   const HELPER_REPO = "https://github.com/bzd6661/TIGER-POWER-Helper";   // 本机助手:只有助手的小仓库;链到仓库页面,下载方法和用法都在它的 README 里
   const realFetch = window.fetch.bind(window);
+  // 访问统计:只报事件名(站长统计页看点连接 / 配对成功各几次),不带任何地址;失败不管。evtOnce 同一个标签页只报一次
+  const evt = (e) => { try { realFetch("/api/pub/evt", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ e }), keepalive: true }).catch(() => {}); } catch {} };
+  const evtOnce = (e) => { try { if (sessionStorage.getItem("tp_evt_" + e)) return; sessionStorage.setItem("tp_evt_" + e, "1"); } catch {} evt(e); };
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const onReady = (f) => (document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", f, { once: true }) : f());
 
@@ -115,7 +118,7 @@
       for (let i = 1; i < tries && res.fail === "down"; i++) { await new Promise((ok) => setTimeout(ok, 3000)); res = await probe(TOKEN, ms); }
       if (res.fail) goOff(res.fail);
       else if (res.h.paired === false) gone();
-      else { verified = true; SS.del("tp_helper_why"); chip?.classList.add("on"); }
+      else { verified = true; SS.del("tp_helper_why"); chip?.classList.add("on"); evtOnce("helper"); }
     } finally { checking = false; }
   }
   const recheckSoon = () => { if (!checking && !reloading && Date.now() - lastCheck > 10_000) verify(2); };
@@ -264,6 +267,7 @@
   }
   function setMsg(text, cls = "err") { const m = dlg.querySelector(".tp-msg"); if (m) { m.className = "tp-msg " + cls; m.textContent = text; } }
   window.tpNeedLogin = () => {
+    evtOnce("login");
     if (!dlg) {
       dlg = document.createElement("div");
       dlg.className = "tp-lm";
@@ -281,7 +285,7 @@
   // 「连接本机助手」:这里才第一次去连 127.0.0.1(用户点的,多等一会儿:浏览器可能正在问「访问本地网络」)
   async function connect() {
     if (busy) return;
-    busy = true; stage("busy");
+    busy = true; stage("busy"); evt("connect");
     try {
       const tok = LS.get("tp_helper_token") || "";
       const res = await probe(tok, 20_000);
@@ -306,7 +310,7 @@
       if (!r.ok || typeof d.token !== "string" || !d.token) return setMsg(d.error || "HTTP " + r.status);
       if (!LS.set("tp_helper_token", d.token)) return setMsg("这个浏览器存不了配对令牌,换个普通窗口(不是无痕窗口)再试");
       clearState();
-      setMsg("配对成功,正在刷新…", "ok");
+      setMsg("配对成功,正在刷新…", "ok"); evt("paired");
       userReload();
     } catch { setMsg(LOST_MSG); }
     finally { busy = false; if (!reloading) { fin.disabled = false; fin.textContent = "完成配对"; } }

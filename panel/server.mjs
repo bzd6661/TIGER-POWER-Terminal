@@ -49,6 +49,7 @@ import { startFlapNft } from "./flapnft.mjs";
 import { cacheStatus } from "./cache.mjs";
 import { startUpdateCheck, updateStatus } from "./update.mjs";
 import { startAutoTransfer, list as atList, setWatch as atSet, target as atTarget, setTarget as atSetTarget, setAppConfirm as atSetAppConfirm } from "./autotransfer.mjs";
+import { isRemoteHost, remoteEnabled, remoteHost, verifyAccess, viaCloudflare } from "./remote.mjs";
 import { webGate, WEB_ORIGINS, checkWebBuy, recordWebBuy, clampWebSlip, logWebOrder, webCopyTaskPlan, checkCopyTaskUnchanged, webPausePolicy,
   webOrderPlan, webScrub, pendingPair, listPairs, revokePair, getWebLimits, setWebLimits, parseWebLimits, webSpentToday, recentWebOrders,
   approvalKind, describeApproval, webApproval, pairAlive, pendingApprovals, decideApproval, onApprovalChange, dropPairApprovals, streamSees,
@@ -300,10 +301,21 @@ const server = http.createServer(async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
   // 网页闸门:官方网站发来的请求在这里验完来源 / 配对令牌 / 白名单(配对接口、预检、拒绝它自己回);本机请求原样交给 guard
-  const w = await webGate(req, res, { port: PORT, build: BUILD, onPairStart, kind: UI });
-  if (w.handled) return;
-  if (w.web) req.web = w;   // { origin, pair }:跳过 guard(来源不是本机、也没有页面令牌)
-  else try { guard(req); } catch (e) { return json(res, 403, { error: e.message }); }
+  // 远程网址(.env 的 PANEL_REMOTE_HOST,经 Cloudflare Tunnel 进来):面板自己验 Cloudflare Access 登录凭证,过了就和本机请求一样
+  if (isRemoteHost(req.headers.host)) {
+    if (!remoteEnabled()) return json(res, 404, { error: "远程访问没开" });
+    try { req.remote = await verifyAccess(req); } catch (e) { return json(res, 403, { error: "远程访问要先通过 Cloudflare 登录:" + e.message }); }
+    const o = req.headers.origin;
+    if (o && o !== `https://${remoteHost()}`) return json(res, 403, { error: "Origin 不允许" });
+    if (req.method === "POST" && req.headers["x-panel-token"] !== TOKEN) return json(res, 403, { error: "令牌不对" });
+  } else {
+    // 经 Cloudflare 转来、却不是冲着远程网址的(比如隧道把 Host 改成了 127.0.0.1):不当成本机请求
+    if (viaCloudflare(req)) return json(res, 403, { error: "经 Cloudflare 来的请求只能走远程网址" });
+    const w = await webGate(req, res, { port: PORT, build: BUILD, onPairStart, kind: UI });
+    if (w.handled) return;
+    if (w.web) req.web = w;   // { origin, pair }:跳过 guard(来源不是本机、也没有页面令牌)
+    else try { guard(req); } catch (e) { return json(res, 403, { error: e.message }); }
+  }
   try {
     // 本机助手界面:/ 是助手页面(两个账号的扫码登录 + 配对码 / 批准框);交易 / 扫链 / 追踪页不提供,转回 /
     if (UI === "helper" && req.method === "GET") {
@@ -407,7 +419,7 @@ ${n ? `<div style="color:#16c784;margin-top:16px">已配对的浏览器:${n} 个
     // 中英文切换(页面加载时最先执行)
     // 新版本提醒:页面脚本 + 状态(只读公开的版本号,不含任何本机信息,GET 不要令牌)
     // 三个页面共用:数字 / 时间格式、单色图标
-    if (req.method === "GET" && (req.url === "/fmt.js" || req.url === "/icons.js")) {
+    if (req.method === "GET" && (req.url === "/fmt.js" || req.url === "/icons.js" || req.url === "/wchips.js")) {
       res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" });
       return res.end(readFileSync(here("." + req.url)));
     }

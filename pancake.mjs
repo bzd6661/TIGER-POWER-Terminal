@@ -3,6 +3,7 @@
 //   没有就找「BNB→中间币→币」(Gang 的盘毕业后池子是和底池币配对的,比如 GANG / BNCB)。
 //   交易照样走 baw contract-call preview(模拟 + 风控),由调用方决定是否 execute。
 import { ethers } from "ethers";
+import { bscProvider } from "./rpc.mjs";
 
 export const ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
 export const FACTORY = "0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73";
@@ -21,7 +22,7 @@ const I = new ethers.Interface([
   "function swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256) payable",
 ]);
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 const call = async (to, fn, args) => I.decodeFunctionResult(fn, await provider.call({ to, data: I.encodeFunctionData(fn, args) }));
 const pairOf = (a, b) => call(FACTORY, "getPair", [a, b]).then((r) => r[0]).catch(() => ethers.ZeroAddress);
 

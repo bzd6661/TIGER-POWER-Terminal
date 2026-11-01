@@ -100,7 +100,7 @@ const store = (init) => {
 // paired:浏览器里有配对令牌(window.TP_HELPER);route(call) 回假响应,没回就是 /link/hello(已配对)或 404
 // fastTimers:1 秒以上的定时器缩成 1/100(登录轮询 2 秒一次,测试不用真等)
 function boot({ paired = true, route = () => null, ls = {}, fastTimers = false } = {}) {
-  const calls = [], streams = [];
+  const calls = [], streams = [], events = [];
   const body = fakeEl("body");
   const document = {
     readyState: "complete", documentElement: fakeEl("html"), head: fakeEl("head"), body,
@@ -119,6 +119,8 @@ function boot({ paired = true, route = () => null, ls = {}, fastTimers = false }
   ctx.fetch = async (input, init = {}) => {
     const url = new URL(typeof input === "string" ? input : input.href ?? input.url, SITE).href;
     const call = { url, method: init.method ?? "GET", headers: new Headers(init.headers), body: init.body ?? null };
+    // 访问统计的事件上报(public.js 的 evt)是发给网站自己的、不带令牌:单独核对,不进路由断言用的 calls
+    if (url === SITE + "/api/pub/evt") { assert.ok(!call.headers.has("authorization"), "统计上报不带配对令牌"); events.push(JSON.parse(call.body).e); return new Response(null, { status: 204 }); }
     calls.push(call);
     const r = await route(call);
     if (r) return r;
@@ -128,7 +130,7 @@ function boot({ paired = true, route = () => null, ls = {}, fastTimers = false }
   vm.createContext(ctx);
   vm.runInContext(SRC, ctx, { filename: "public.js" });
   const post = (p, b = {}) => ctx.fetch(p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
-  return { ctx, calls, streams, body, post };
+  return { ctx, calls, streams, body, post, events };
 }
 
 test("连着助手:钱包接口带令牌发本机助手;扫链 / 成交这些问网站,收藏 / 追踪名单在浏览器里;令牌不出本机", async () => {

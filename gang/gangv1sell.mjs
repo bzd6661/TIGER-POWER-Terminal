@@ -3,11 +3,12 @@
 //   每个 CA:按持仓 pct% 卖 → quoteSell 报价 → 授权发射台恰好这个数量(不够才授权)→ sell(token, amount, minOut) → 等上链,打印到手 BNB。
 //   pct 默认 100(全卖);slip 默认 5%(内盘曲线是确定的,滑点只防卖出前别人先成交)。
 import { ethers } from "ethers";
+import { bscProvider } from "../rpc.mjs";
 import { takeAcct, bawSpawn, runBoth } from "../accounts.mjs";
 
 const PAD = "0x315Ba2e8952D06094CC636b2B84229FA32fb23A7";
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 provider.pollingInterval = 300;   // 等回执时每 0.3 秒查一次(ethers 默认 4 秒)
 const iface = new ethers.Interface([
   "function quoteSell(address,uint256) view returns (uint256 bnbOut,uint256 fee)",

@@ -7,11 +7,12 @@
 //   交易都先经 baw contract-call preview(模拟 + 风控);要去 App 批准、或钱包报风险的不提交。--dry 只报价和模拟。
 import { readFileSync } from "node:fs";
 import { ethers } from "ethers";
+import { bscProvider } from "./rpc.mjs";
 import { takeAcct, bawSpawn, runBoth } from "./accounts.mjs";
 
 const PORTAL = "0xe2cE6ab80874Fa9Fa2aAE65D277Dd6B8e65C9De0";
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 provider.pollingInterval = 300;
 const P = new ethers.Interface([
   "function nftGate(address) view returns (address)",

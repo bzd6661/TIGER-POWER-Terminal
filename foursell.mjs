@@ -14,6 +14,7 @@ import { bawSpawn } from "./accounts.mjs";
 import { checkLiquid } from "./liq.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import { ethers } from "ethers";
+import { bscProvider } from "./rpc.mjs";
 
 const CORE = "0xebe7b6c1089d9f72ad07f34e36d898e44e5e27f3";
 const TOOLS = "0x97da82f56fef1a0b974587a48135fa9da2a4e905";
@@ -21,7 +22,7 @@ const WBNB = "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
 const BNB = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const WALLET_CACHE = new URL("./.wallet", import.meta.url);
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 provider.pollingInterval = 300;   // 等回执时每 0.3 秒查一次(ethers 默认 4 秒)
 
 const core = new ethers.Contract(CORE, [

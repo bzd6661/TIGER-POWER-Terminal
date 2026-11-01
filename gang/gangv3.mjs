@@ -9,12 +9,14 @@
 //   卖:先授权这次卖出的数量,发射台 sell 拿回底池币,默认再换回 BNB(WBNB 直接 withdraw;--keep 留着)。
 //   已毕业的币自动转到外盘(dexbuy / dexsell)。每笔都先 eth_call 模拟,再经 baw preview(模拟 + 风控),有风险默认不提交。
 import { ethers } from "ethers";
+import { bscProvider } from "../rpc.mjs";
 import { readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { takeAcct, bawSpawn, runBoth } from "../accounts.mjs";
 import { checkLiquid } from "../liq.mjs";
 import { perBnb, bnbToToken, tokenToBnb } from "../quoteswap.mjs";
+import { MARKET_CLOSED, V3_SWAP_ROUTER, V3R, bnbForExactOut, buyWithBnbCalldata } from "../v3swap.mjs";
 
 export const V3_PAD = "0x15CFD2dc8278Fb87a1783ef42111618E20874365";
 export const V3_ROUTER = "0xE040445690Aa56C8b68B7f7038C7b2562B5079C4";
@@ -35,7 +37,7 @@ const ROUTER = new ethers.Interface([
 ]);
 const E = new ethers.Interface(["function balanceOf(address) view returns (uint256)", "function allowance(address,address) view returns (uint256)", "function approve(address,uint256)", "function symbol() view returns (string)", "function withdraw(uint256)"]);
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 provider.pollingInterval = 300;
 const t0 = Date.now();
 const log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...a);
@@ -179,12 +181,26 @@ if (side === "buy") {
     const deficit = quoteIn - have;
     { const lq = await checkLiquid(quote); if (!lq.ok) die(lq.msg + "(钱没动)"); }
     let pb;
-    try { pb = await perBnb(baw, quote, swapSlip); } catch (e) { die(e.message); }
+    try { pb = await perBnb(baw, quote, swapSlip); } catch (e) {
+      if (!MARKET_CLOSED.test(e.message)) die(e.message);
+      // 币安说休市(Ondo 股票代币):改走 Pancake V3 池子,用 BNB 直接换够差的底池币
+      const v3 = await bnbForExactOut(provider, quote, deficit);
+      if (!v3) die(`${e.message}(Pancake V3 上也没有 ${qSym}/WBNB 池子,钱没动)`);
+      const bnbIn = (v3.bnbIn * BigInt(Math.round((100 + Number(swapSlip)) * 100))) / 10000n;
+      log(`币安休市换不了 ${qSym},改走 Pancake V3(${v3.fee / 10000}% 池):用 ${ethers.formatEther(bnbIn)} BNB 换至少 ${ethers.formatEther(deficit)} ${qSym}`);
+      if (maxBnb !== null && bnbIn > ethers.parseEther(String(maxBnb))) die(`约需 ${ethers.formatEther(bnbIn)} BNB,超过上限 ${maxBnb} BNB,不买(钱没动)`);
+      try { await call(V3_SWAP_ROUTER, V3R, "exactInputSingle", [[WBNB, quote, v3.fee, W, deadline(), bnbIn, deficit, 0n]], { from: W, value: bnbIn }); } catch (er) { die(`Pancake 兑换模拟失败:${er.shortMessage ?? er.message}(钱没动)`); }
+      if (DRY) { await run(`BNB→${qSym}(Pancake)`, V3_SWAP_ROUTER, buyWithBnbCalldata({ token: quote, fee: v3.fee, recipient: W, amountIn: bnbIn, minOut: deficit }), bnbIn); log("--dry:不兑换,也不买"); process.exit(0); }
+      await run(`BNB→${qSym}(Pancake)`, V3_SWAP_ROUTER, buyWithBnbCalldata({ token: quote, fee: v3.fee, recipient: W, amountIn: bnbIn, minOut: deficit }), bnbIn);
+      have = await balanceOf(quote, W);
+    }
+    if (pb) {
     const slipMul = pb.via === "usdt" ? (1 + Number(swapSlip) / 100) ** 2 : 1 + Number(swapSlip) / 100;
     const bnbAmt = ((Number(ethers.formatEther(deficit)) / pb.perBnb) * slipMul * 1.03).toFixed(6);
     log(`${qSym} 不够,用 ${bnbAmt} BNB 兑换(约 ${pb.perBnb.toFixed(4)} 个/BNB${pb.via === "usdt" ? ",经 USDT 中转" : ""})`);
     if (DRY) { log("--dry:不兑换,也不买"); process.exit(0); }
     try { await bnbToToken({ baw, wallet: W, token: quote, bnbAmt, slip: swapSlip, balanceOf, log, sym: qSym }); } catch (e) { die(`兑换失败:${e.message}`); }
+    }
     for (let i = 0; i < 15; i++) { have = await balanceOf(quote, W); if (have >= quoteIn) break; await sleep(400); }
     if (have < quoteIn) { if (have * 100n < quoteIn * 97n) die(`${qSym} 还是不够(有 ${ethers.formatEther(have)},需 ${ethers.formatEther(quoteIn)})`); quoteIn = have; }
   }
@@ -228,6 +244,6 @@ if (side === "buy") {
     process.exit(0);
   }
   { const lq = await checkLiquid(quote); if (!lq.ok) { log(`⚠️ ${lq.msg}。卖出已完成,${qSym} 留在钱包里(面板「底池币余额」可以之后再换)`); process.exit(0); } }
-  try { const back = await tokenToBnb({ baw, wallet: W, token: quote, amountWei: got, slip: swapSlip, balanceOf, log, sym: qSym }); log(`✓ 完成,换回 ${ethers.formatEther(back)} BNB`); }
+  try { const back = await tokenToBnb({ baw, provider, wallet: W, token: quote, amountWei: got, slip: swapSlip, balanceOf, log, sym: qSym }); log(`✓ 完成,换回 ${ethers.formatEther(back)} BNB`); }
   catch (e) { die(`${qSym} 换 BNB 失败(卖出已完成,底池币留在钱包里):${e.message}`); }
 }

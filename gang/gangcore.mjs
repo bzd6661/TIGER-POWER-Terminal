@@ -18,6 +18,9 @@ function findCli() {
   if (existsSync(p)) return p;
   throw new Error("没装 gang CLI:npm i -g @gangfun/cli");
 }
+// gang CLI 读链默认用写死的公共节点(bsc-dataseed.binance.org);那个节点拒绝时它会把错误吞掉、报成「不是 Gang 币」。
+// 有自己的节点(.env 的 BSC_RPC)就让它也用自己的节点(CLI 认 GANG_RPC_URL;要在 import chain.js 之前设)
+if (!process.env.GANG_RPC_URL && process.env.BSC_RPC) process.env.GANG_RPC_URL = process.env.BSC_RPC;
 const chain = await import(pathToFileURL(findCli()).href);
 const { tokenInfo, quoteBuy, quoteSell, resolvePad, isAgent, allowance, balanceOf, calldata, parseEther, fmt, fmtTok } = chain;
 

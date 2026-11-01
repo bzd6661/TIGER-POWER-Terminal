@@ -3,13 +3,14 @@
 //   内盘阶段买到的是「份额」;开盘(phase=3)后要 Portal.claim(market) 才变成钱包里的代币。只领自己的,不转走任何东西。
 //   还没开盘 → 退出码 3;没有可领的份额 → 退出码 4。和其他脚本一样:preview 模拟不过 / 有风险提示 / 要去 App 批准,都不提交。
 import { ethers } from "ethers";
+import { bscProvider } from "./rpc.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import { takeAcct, bawSpawn, runBoth } from "./accounts.mjs";
 
 const FACTORY = "0xC55820f24015bE7c4f18949D9e1363A3609B300e";
 const PORTAL = "0x49387D2E6cbF8FefE856e3FBc3E98a01aC3af062";
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 provider.pollingInterval = 300;   // 等回执时每 0.3 秒查一次(ethers 默认 4 秒)
 const iface = new ethers.Interface([
   "function marketOfToken(address) view returns (address)",

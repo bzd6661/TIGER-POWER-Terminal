@@ -8,12 +8,13 @@
 import { takeAcct, bawSpawn, runBoth } from "./accounts.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import { ethers } from "ethers";
+import { bscProvider } from "./rpc.mjs";
 
 const FACTORY = "0xC55820f24015bE7c4f18949D9e1363A3609B300e";
 const PORTAL = "0x49387D2E6cbF8FefE856e3FBc3E98a01aC3af062";
 const BNB = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 provider.pollingInterval = 300;   // 等回执时每 0.3 秒查一次(ethers 默认 4 秒)
 const iface = new ethers.Interface([
   "function marketOfToken(address) view returns (address)",

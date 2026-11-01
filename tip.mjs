@@ -6,6 +6,7 @@
 import "./env.mjs";
 import { readFileSync } from "node:fs";
 import { ethers } from "ethers";
+import { bscProvider } from "./rpc.mjs";
 import { takeAcct, bawSpawn } from "./accounts.mjs";
 
 export const TIP = JSON.parse(readFileSync(new URL("./contracts/tip.json", import.meta.url), "utf8"));
@@ -24,7 +25,7 @@ if (!/^\d+(\.\d{1,8})?$/.test(amt ?? "") || !(Number(amt) > 0) || Number(amt) > 
 const art = JSON.parse(readFileSync(new URL("./contracts/TMTip.json", import.meta.url), "utf8"));
 const I = new ethers.Interface(art.abi);
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 provider.pollingInterval = 300;
 const baw = (a) => new Promise((res) => {
   const ps = bawSpawn(ACCT, [...a, "--json"]); let out = "";

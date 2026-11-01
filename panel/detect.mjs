@@ -1,12 +1,13 @@
 // 识别一个 CA:哪个平台、内盘还是外盘、两个账号各持有多少、现在值多少、买 1% 要多少。只读,不发交易。
 import { ethers } from "ethers";
+import { bscProvider } from "../rpc.mjs";
 import { addresses } from "./session.mjs";
 import { portalState, gateOf, holdsNft, nftName } from "./flapnft.mjs";
 import { bnbUsd } from "./prices.mjs";
 
 const net = ethers.Network.from(56);
 // batchMaxCount:同一时刻的请求会被打成一批发出去,公共节点对「一批里的 eth_call 数量」限流(-32005),所以一批最多 10 个
-export const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net, batchMaxCount: 10 });
+export const provider = bscProvider(net, { staticNetwork: net, batchMaxCount: 10 });
 
 const FOUR_CORE = "0xebe7b6C1089D9F72aD07f34E36d898e44E5e27f3";
 const FOUR_TOOLS = "0x97DA82f56FEF1A0B974587a48135fa9dA2A4E905";

@@ -10,13 +10,14 @@
 //                 高风险 / 钓鱼等照样拦。提交后最多等 5 分钟,看到余额减少才算完成。
 //   面板的「发射后自动转出」就是调这个脚本。
 import { ethers } from "ethers";
+import { bscProvider } from "./rpc.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import { takeAcct, bawSpawn, runBoth } from "./accounts.mjs";
 
 const FACTORY = "0xC55820f24015bE7c4f18949D9e1363A3609B300e";   // ID Agent 工厂
 const PORTAL = "0x49387D2E6cbF8FefE856e3FBc3E98a01aC3af062";
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 provider.pollingInterval = 300;   // 等回执时每 0.3 秒查一次(ethers 默认 4 秒)
 const iface = new ethers.Interface([
   "function marketOfToken(address) view returns (address)",

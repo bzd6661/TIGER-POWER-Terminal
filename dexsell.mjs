@@ -4,11 +4,12 @@
 //   → 轮询订单到终态 → 打印实际到手 BNB。--dry 只报价不卖。
 //   滑点默认 10%(不是 auto:auto 对小币可能给到 20% 以上,实际成交可能比报价低很多)。
 import { ethers } from "ethers";
+import { bscProvider } from "./rpc.mjs";
 import { takeAcct, bawSpawn, runBoth } from "./accounts.mjs";
 
 const BNB = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 provider.pollingInterval = 300;   // 等回执时每 0.3 秒查一次(ethers 默认 4 秒)
 const erc20 = new ethers.Interface(["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)", "function symbol() view returns (string)", "function allowance(address,address) view returns (uint256)"]);
 const t0 = Date.now();
@@ -57,13 +58,22 @@ const qty = ethers.formatUnits(amount, dec);
 
 const q = await baw(["market-order", "quote", "--fromTokenQty", qty, "--fromToken", ca, "--toToken", BNB, "--binanceChainId", "56", "--slippage", slip]);
 // Ondo 类代币(FXIon 等,面板「底池币余额 → 换回 BNB」常遇到):币安只允许和稳定币换,改走 代币 → USDT → BNB
-if (!q.success && /one side must be a supported stablecoin|Unsupported token pair for Ondo/i.test(JSON.stringify(q.error ?? q))) {
+//   美股休市时币安报「no available liquidity」:tokenToBnb 会自动改走 Pancake V3,这里只用 Pancake 报个估计
+if (!q.success && /one side must be a supported stablecoin|Unsupported token pair for Ondo|no available liquidity|stock market opening hours|316008/i.test(JSON.stringify(q.error ?? q))) {
   const { perBnb, tokenToBnb } = await import("./quoteswap.mjs");
-  const pb = await perBnb(baw, ca, slip).catch((e) => die(e.message));
-  log(`${sym} ${ca}  卖 ${qty} 个(持仓 ${ethers.formatUnits(bal, dec)} 的 ${pctRaw}%),Ondo 类代币经 USDT 中转,估计 ≈ ${(Number(qty) / pb.perBnb).toFixed(6)} BNB`);
+  const { MARKET_CLOSED, bnbForExactIn } = await import("./v3swap.mjs");
+  let est;
+  try { est = `Ondo 类代币经 USDT 中转,估计 ≈ ${(Number(qty) / (await perBnb(baw, ca, slip)).perBnb).toFixed(6)} BNB`; }
+  catch (e) {
+    if (!MARKET_CLOSED.test(e.message)) die(e.message);
+    const v3 = await bnbForExactIn(provider, ca, amount);
+    if (!v3) die(`${e.message}(Pancake V3 上也没有 ${sym}/WBNB 池子)`);
+    est = `币安休市,走 Pancake V3,估计 ≈ ${Number(ethers.formatEther(v3.bnbOut)).toFixed(6)} BNB`;
+  }
+  log(`${sym} ${ca}  卖 ${qty} 个(持仓 ${ethers.formatUnits(bal, dec)} 的 ${pctRaw}%),${est}`);
   if (DRY) { log("--dry:只报价,没有卖"); process.exit(0); }
   const balOf = async (t, w) => (t === BNB ? 0n : BigInt(await provider.call({ to: t, data: "0x70a08231" + w.slice(2).toLowerCase().padStart(64, "0") })));
-  try { const got = await tokenToBnb({ baw, wallet: W, token: ca, amountWei: amount, decimals: Number(dec), slip, balanceOf: balOf, log, sym }); log(`✓ 成交,到手约 ${ethers.formatEther(got)} BNB`); }
+  try { const got = await tokenToBnb({ baw, provider, wallet: W, token: ca, amountWei: amount, decimals: Number(dec), slip, balanceOf: balOf, log, sym }); log(`✓ 成交,到手约 ${ethers.formatEther(got)} BNB`); }
   catch (e) { die(e.message); }
   process.exit(0);
 }

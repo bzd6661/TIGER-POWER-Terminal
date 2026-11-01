@@ -28,6 +28,7 @@ import { bawSpawn } from "./accounts.mjs";
 import { checkLiquid } from "./liq.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import { ethers } from "ethers";
+import { bscProvider } from "./rpc.mjs";
 
 const PRESET = 1778027615735n;
 const CORE = "0xebe7b6c1089d9f72ad07f34e36d898e44e5e27f3";
@@ -39,7 +40,7 @@ const TOKEN_CREATED = "0x7dae4dcd1b20eb0445e7cc1d02b3e2e7f32fa63081a0e764732c269
 const WALLET_CACHE = new URL("./.wallet", import.meta.url);
 
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 provider.pollingInterval = 300;   // 等回执时每 0.3 秒查一次(ethers 默认 4 秒)
 // getLogs:dataseed 不支持,换能拉日志的节点
 const logProvider = new ethers.JsonRpcProvider(process.env.BSC_LOG_RPC || process.env.BSC_RPC || "https://rpc-bsc.48.club", net, { staticNetwork: net });

@@ -4,11 +4,12 @@
 //   每个 CA:walletRoom 看还能买多少 → quoteBuy 算要多少 BNB → 多带 buffer%(多付的合约会退回)→ buy(token, minOut) → 等上链。
 //   已经买满的币自动跳过。多个 CA 按顺序买。
 import { ethers } from "ethers";
+import { bscProvider } from "../rpc.mjs";
 import { takeAcct, bawSpawn, runBoth } from "../accounts.mjs";
 
 const PAD = "0x315Ba2e8952D06094CC636b2B84229FA32fb23A7";
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 provider.pollingInterval = 300;   // 等回执时每 0.3 秒查一次(ethers 默认 4 秒)
 const iface = new ethers.Interface([
   "function walletRoom(address,address) view returns (uint256)",

@@ -22,6 +22,7 @@ import { spawn } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { ethers } from "ethers";
+import { bscProvider } from "./rpc.mjs";
 
 const CORE = "0xebe7b6c1089d9f72ad07f34e36d898e44e5e27f3";
 const TOKEN_CREATED = "0x7dae4dcd1b20eb0445e7cc1d02b3e2e7f32fa63081a0e764732c269f2b8f228f"; // topic1 = presetId, topic3 = token
@@ -48,7 +49,7 @@ if (!(FIRST >= 0 && LAST >= FIRST)) { console.error("✗ 要求 0 <= --first <= 
 const logRpc = process.env.BSC_LOG_RPC || "https://rpc-bsc.48.club";
 const net = ethers.Network.from(56);
 const lp = new ethers.JsonRpcProvider(logRpc, net, { staticNetwork: net });
-const bp = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const bp = bscProvider(net, { staticNetwork: net });
 
 // Telegram:读 .env 里的 TG_BOT_TOKEN / TG_CHAT_ID,没配就只打印
 const tg = process.env.TG_BOT_TOKEN && process.env.TG_CHAT_ID ? {

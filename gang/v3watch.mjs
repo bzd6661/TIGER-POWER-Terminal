@@ -21,6 +21,7 @@ import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, rmS
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { ethers } from "ethers";
+import { bscProvider } from "../rpc.mjs";
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const STATE = process.env.V3WATCH_STATE || here("./v3-state.json"), LOG = here("./v3watch.log"), CLI_DIR = here("./cli-latest/");
@@ -41,7 +42,7 @@ const PAD_MIN_BYTES = 12_000;
 for (const a of (process.env.V3WATCH_FORGET || "").split(",").filter(Boolean)) KNOWN_PADS.delete(a.trim().toLowerCase());
 
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 const LOG_RPC = process.env.BSC_LOG_RPC || "https://bsc-rpc.publicnode.com";
 async function getLogs(filter) {
   const r = await fetch(LOG_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getLogs", params: [filter] }), signal: AbortSignal.timeout(20000) });

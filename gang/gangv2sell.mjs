@@ -4,6 +4,7 @@
 //   V2 卖出拿回的是底池币(GANG / BNCB / WBNB …),默认再用外盘把拿回的底池币换成 BNB(--keep 则留着)。
 //   钱包报风险提示时默认不执行;--accept-risk 打印风险原文后仍提交(钱包设成「需要确认」时还要去 App 点确认)。
 import { ethers } from "ethers";
+import { bscProvider } from "../rpc.mjs";
 import { takeAcct, bawSpawn, runBoth, BAW2_ENTRY, BAW2_DIR } from "../accounts.mjs";
 import { makeGang } from "./gangcore.mjs";
 import { checkLiquid } from "../liq.mjs";
@@ -11,7 +12,7 @@ import { tokenToBnb, quoteDecimals } from "../quoteswap.mjs";
 
 const WBNB = "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
 const net = ethers.Network.from(56);
-const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+const provider = bscProvider(net, { staticNetwork: net });
 provider.pollingInterval = 300;   // 等回执时每 0.3 秒查一次(ethers 默认 4 秒)
 const erc20 = new ethers.Interface(["function balanceOf(address) view returns (uint256)", "function withdraw(uint256)"]);
 const t0 = Date.now();
@@ -118,6 +119,6 @@ if (quote.toLowerCase() === WBNB) {
 { const lq = await checkLiquid(quote); if (!lq.ok) { log(`⚠️ ${lq.msg}。卖出已完成,底池币留在钱包里(面板「底池币余额」可以之后再换)`); process.exit(0); } }
 // Ondo 类底池币(FXIon 等)自动经 USDT 中转换回 BNB
 let bnbBack;
-try { bnbBack = await tokenToBnb({ baw, wallet: W, token: quote, amountWei: got, decimals: qDec, slip: swapSlip, balanceOf, log }); }
+try { bnbBack = await tokenToBnb({ baw, provider, wallet: W, token: quote, amountWei: got, decimals: qDec, slip: swapSlip, balanceOf, log }); }
 catch (e) { die(`底池币换 BNB 失败(卖出已完成,底池币 / USDT 留在钱包里,面板「底池币余额」可以之后再换):${e.message}`); }
 log(`✓ 完成,底池币换回 ${ethers.formatEther(bnbBack)} BNB`);

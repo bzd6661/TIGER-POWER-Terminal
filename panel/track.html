@@ -9,6 +9,7 @@
 <script src="/localpop.js"></script>
 <script src="/fmt.js"></script>
 <script src="/icons.js"></script>
+<script src="/wchips.js"></script>
 <script src="/update.js" defer></script>
 <style>
   :root {
@@ -291,6 +292,7 @@ async function refreshToken() {
   if (m) TOKEN = m[1];
   return !!m;
 }
+window.addEventListener("load", () => window.tpWalletChips?.(post));   // 顶栏的账号余额(wchips.js)
 async function post(path, body = {}) {
   const send = () => fetch(path, { method: "POST", headers: { "content-type": "application/json", "x-panel-token": TOKEN }, body: JSON.stringify(body) });
   let r = await send();

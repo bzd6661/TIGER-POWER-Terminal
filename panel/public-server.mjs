@@ -24,6 +24,7 @@ const { startLive, bus, liveStatus } = await import("./live.mjs");
 const { startFlapNft } = await import("./flapnft.mjs");
 const { bnbUsd } = await import("./prices.mjs");
 const { tradeStats, detectCached, gangNotes, tickerOf } = await import("./readapi.mjs");
+const stats = await import("./pubstats.mjs");
 
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -146,7 +147,30 @@ function page(file) {
   pageCache.set(file, html);
   return html;
 }
-const STATIC = { "/fmt.js": "fmt.js", "/icons.js": "icons.js", "/i18n.js": "i18n.js", "/public.js": "public.js", "/vendor/lightweight-charts.js": "vendor/lightweight-charts.js" };
+const STATIC = { "/fmt.js": "fmt.js", "/icons.js": "icons.js", "/wchips.js": "wchips.js", "/i18n.js": "i18n.js", "/public.js": "public.js", "/vendor/lightweight-charts.js": "vendor/lightweight-charts.js" };
+// 站长统计页(/stats):服务端直接画成表格,不带任何脚本
+function statsPage(s) {
+  const e = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const top = (m, n = 12) => Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, n);
+  const rows = (m, label = (k) => k) => top(m).map(([k, v]) => `<tr><td>${e(label(k))}</td><td class="n">${v}</td></tr>`).join("") || '<tr><td colspan="2" class="f">还没有</td></tr>';
+  const evName = (k) => stats.EVENTS[k] ?? k;
+  const card = (t, a, b) => `<div class="c"><div class="f">${t}</div><div class="big">${a}</div><div class="f">${b}</div></div>`;
+  const block = (title, r) => `<div class="b"><h3>${title}</h3><div class="g">
+    <table><tr><th>页面</th><th>打开</th></tr>${rows(r.pv)}</table>
+    <table><tr><th>事件</th><th>次数</th></tr>${rows(r.evt, evName)}</table>
+    <table><tr><th>国家 / 地区</th><th>打开</th></tr>${rows(r.cc)}</table>
+    <table><tr><th>从哪来</th><th>打开</th></tr>${rows(r.ref)}</table></div></div>`;
+  const daily = s.daily.map((x) => `<tr><td>${e(x.d)}</td><td class="n">${x.pv}</td><td class="n">${x.uv}</td><td class="n">${x.evt.connect ?? 0}</td><td class="n">${x.evt.paired ?? 0}</td><td class="n">${x.evt.helper ?? 0}</td></tr>`).join("");
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>访问统计 · TIGER POWER</title>
+<style>body{margin:0;background:#0a0c0f;color:#e7eaf0;font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}.w{max-width:1100px;margin:0 auto;padding:22px 16px 50px}h1{font-size:22px;margin:0 0 4px}h3{margin:0 0 10px;font-size:15px}
+.f{color:#8d96a7;font-size:12px}.cs{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:16px 0}.c{background:#101318;border:1px solid #1e232c;border-radius:10px;padding:12px 14px}.big{font-size:24px;font-weight:800;color:#f0b90b}
+.b{background:#101318;border:1px solid #1e232c;border-radius:10px;padding:14px;margin:14px 0}.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;color:#8d96a7;font-weight:500;border-bottom:1px solid #1e232c;padding:4px 6px}td{padding:4px 6px;border-bottom:1px solid #151920}.n{text-align:right;font-variant-numeric:tabular-nums}th:last-child{text-align:right}</style></head><body><div class="w">
+<h1>访问统计</h1><div class="f">北京时间按天算 · 只记数字,不存 IP / 钱包地址 · 机器人不算 · 服务器已运行 ${s.live.upMin} 分钟</div>
+<div class="cs">${card("现在开着页面", s.live.streams, "连着实时推送的页面数")}${card("今天打开", s.today.pvTotal, `独立访客 ${s.today.uv}`)}${card("昨天打开", s.yesterday.pvTotal, `独立访客 ${s.yesterday.uv}`)}${card("近 7 天打开", s.d7.pvTotal, `每天独立访客相加 ${s.d7.uv}`)}${card("近 30 天打开", s.d30.pvTotal, `每天独立访客相加 ${s.d30.uv}`)}${card("今天连本机助手", s.today.evt.paired ?? 0, `配对成功 · 点连接 ${s.today.evt.connect ?? 0} 次`)}</div>
+${block("今天", s.today)}${block("近 7 天", s.d7)}
+<div class="b"><h3>每天</h3><table><tr><th>日期</th><th>打开</th><th>独立访客</th><th>点连接</th><th>配对成功</th><th>连着助手打开</th></tr>${daily || '<tr><td colspan="6" class="f">还没有</td></tr>'}</table></div>
+</div></body></html>`;
+}
 // 图文教程 /guide:独立页面,不用公开模式脚本(没有钱包 / 下单),只要英文翻译;截图在 panel/guide/*.webp
 function guidePage() {
   if (pageCache.has("guide") && process.env.NODE_ENV === "production") return pageCache.get("guide");
@@ -172,9 +196,24 @@ const server = http.createServer(async (req, res) => {
     // ---- 页面和静态文件 ----
     // 老链接(首页还是交易页时分享出去的 /?ca=…、页面里的 /?go=… / ?tip=1)转到交易页
     if (req.method === "GET" && path === "/" && ["ca", "go", "tip"].some((k) => url.searchParams.has(k))) { res.writeHead(302, { location: "/trade" + url.search, "cache-control": "no-store" }); return res.end(); }
-    if (req.method === "GET" && PAGES[path]) { res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": CSP, "cache-control": "no-cache" }); return res.end(page(PAGES[path])); }
+    if (req.method === "GET" && PAGES[path]) { stats.pageView(req, ip, path === "/" ? "/(扫链首页)" : path); res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": CSP, "cache-control": "no-cache" }); return res.end(page(PAGES[path])); }
+    // 站长统计页:第一次用 /stats?key=… 打开,记进只给 /stats 用的 cookie 再跳回 /stats(口令不留在地址栏);口令不对或没配一律 404
+    if (req.method === "GET" && path === "/stats") {
+      const NOSTORE = { "cache-control": "no-store", "referrer-policy": "no-referrer", "x-robots-tag": "noindex" };
+      const q = url.searchParams.get("key");
+      if (q !== null) {
+        if (!stats.keyOk(q)) { res.writeHead(404, NOSTORE); return res.end(); }
+        res.writeHead(302, { ...NOSTORE, location: "/stats", "set-cookie": `tp_stats=${encodeURIComponent(q)}; Path=/stats; Max-Age=31536000; HttpOnly; Secure; SameSite=Strict` });
+        return res.end();
+      }
+      const ck = /(?:^|;\s*)tp_stats=([^;]+)/.exec(String(req.headers.cookie ?? ""))?.[1];
+      let k = null; try { k = ck ? decodeURIComponent(ck) : null; } catch {}
+      if (!stats.keyOk(k)) { res.writeHead(404, NOSTORE); return res.end(); }
+      res.writeHead(200, { ...NOSTORE, "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'" });
+      return res.end(statsPage(stats.summary({ streams: streams.size, upMin: Math.round((Date.now() - t0) / 60000) })));
+    }
     if (req.method === "GET" && STATIC[path]) { res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" }); return res.end(readFileSync(here("./" + STATIC[path]))); }
-    if (req.method === "GET" && (path === "/guide" || path === "/guide/")) { res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": CSP, "cache-control": "no-cache" }); return res.end(guidePage()); }
+    if (req.method === "GET" && (path === "/guide" || path === "/guide/")) { stats.pageView(req, ip, "/guide"); res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": CSP, "cache-control": "no-cache" }); return res.end(guidePage()); }
     // 教程截图:文件名只认小写字母 / 数字 / 横线(不会读到别的目录);一天缓存,Cloudflare 边缘也缓存
     const gm = req.method === "GET" && path.match(/^\/guide\/img\/([a-z0-9-]{1,40}\.webp)$/);
     if (gm) {
@@ -215,6 +254,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && path === "/api/scan") return send(res, 200, scanPacked(await scan(), !url.searchParams.has("full")), 5);   // 给 CDN 缓存 5 秒
     if (req.method !== "POST") return json(res, 404, { error: "没有这个接口" });
     const b = await body(req);
+    // 页面上报的事件(点连接 / 配对成功…):只记次数,不认识的名字丢掉
+    if (path === "/api/pub/evt") { stats.event(String(b.e ?? "")); res.writeHead(204, { "cache-control": "no-store" }); return res.end(); }
+    stats.apiCall();
     const needCa = () => { if (!ethers.isAddress(b.ca ?? "")) throw new Error("CA 格式不对"); return b.ca; };
     switch (path) {
       case "/api/scan": return send(res, 200, scanPacked(await scan(), b.lite === true));

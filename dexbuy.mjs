@@ -4,6 +4,7 @@
 //   刚毕业的盘币安聚合器常常还报不出价:自动改走 PancakeSwap V2 直连(pancake.mjs),同样先 preview 模拟和风控。
 //   --mid <地址>:直连时优先试的中间币(Gang 毕业的盘传它的底池币)
 import { ethers } from "ethers";
+import { bscProvider } from "./rpc.mjs";
 import { takeAcct, bawSpawn, runBoth } from "./accounts.mjs";
 
 const BNB = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
@@ -80,7 +81,7 @@ async function pancakeBuy() {
   if (!ex.data.txHash) die(`没拿到 txHash(${ex.data.status}),去 Binance App 看一下,别重复提交`);
   log(`已提交 ${ex.data.txHash}`);
   const net = ethers.Network.from(56);
-  const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC || "https://bsc-dataseed.bnbchain.org", net, { staticNetwork: net });
+  const provider = bscProvider(net, { staticNetwork: net });
   provider.pollingInterval = 300;
   const rc = await provider.waitForTransaction(ex.data.txHash, 1, 60_000).catch(() => null);
   if (!rc) die(`60 秒没确认,别重复提交:${ex.data.txHash}`);
