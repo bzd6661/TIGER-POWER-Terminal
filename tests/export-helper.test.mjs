@@ -34,7 +34,7 @@ const PRESENT = ["start.cmd", "panel/start.cmd", "panel/setup.mjs", "panel/daemo
   "nokeytar.mjs", "transfer.mjs", "tip.mjs", "claim.mjs", "contracts/tip.json", "baw2/package.json", "README.md", "version.json", ".env.example",
   ".gitignore", "package.json", "package-lock.json", ".gitattributes",
   // 下单路径上的脚本(server.mjs 的 route() / 跟单 / 自动转出 / 自动领取会起的)
-  "fast.mjs", "sell.mjs", "fourbuy.mjs", "foursell.mjs", "dexbuy.mjs", "dexsell.mjs", "flapportal.mjs", "gang/gangbuy.mjs", "gang/gangv1buy.mjs",
+  "fast.mjs", "sell.mjs", "fourbuy.mjs", "foursell.mjs", "dexbuy.mjs", "dexsell.mjs", "flapportal.mjs", "agentcurve.mjs", "gang/gangbuy.mjs", "gang/gangv1buy.mjs",
   "gang/gangv1sell.mjs", "gang/gangv2sell.mjs", "gang/gangv3.mjs", "gang/gangcore.mjs", "contracts/TMTip.json", "baw2/package-lock.json", "baw2/baw2.cmd"];
 // 结尾是 / 的是整个目录
 const ABSENT = ["panel/index.html", "panel/scan.html", "panel/track.html", "panel/public.js", "panel/public-server.mjs", "panel/vendor/", "deploy/",

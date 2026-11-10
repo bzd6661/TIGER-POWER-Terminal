@@ -3,6 +3,8 @@
 //   node gangv3.mjs buy  <CA> [--tokens 数量 | --bnb 数量] [--max-bnb 0.2] [--slip 5] [--acct 1|2|both] [--dry]
 //   node gangv3.mjs sell <CA> <百分比1-100> [--slip 5] [--keep] [--app-confirm] [--accept-risk] [--acct 1|2|both] [--dry]
 //   地址来自官方仓库 gangfun/gang-launchpad(skill/gang-cli/src/gangpad.js):发射台 0x15CFD2dc…、GangRouter 0xE0404456…
+//   同一套曲线的还有 2.0(10-31)、2.0 金库版(11-02)、3.0(11-03,可升级代理),各有自己的 GangRouter(地址同上面官方 gangpad.js,
+//   3.0 见 docs/MAINNET-GANG-LAUNCHPAD-3-2026-11-03.md):按 PADS 顺序查 curves(),之后买卖都打到认出这个币的那一个。
 //   曲线和 V2 一样(虚拟储备、1% 手续费、单钱包 1% 上限、只有持 Agent ID 的钱包能在内盘买卖);内盘不收税,买卖税只在毕业后的外盘收。
 //   买:底池是 WBNB 的走 Router.v3BuyBNB(直接付 BNB,一笔搞定;超过上限 / 毕业截断的部分以 WBNB 退回钱包);
 //       其他底池币先用 BNB 换够(quoteswap,Ondo 类经 USDT),再授权 + 发射台 buy。不指定数量就买到单钱包上限(总量 1%)。
@@ -20,6 +22,12 @@ import { MARKET_CLOSED, V3_SWAP_ROUTER, V3R, bnbForExactOut, buyWithBnbCalldata 
 
 export const V3_PAD = "0x15CFD2dc8278Fb87a1783ef42111618E20874365";
 export const V3_ROUTER = "0xE040445690Aa56C8b68B7f7038C7b2562B5079C4";
+export const PADS = [
+  { gen: "1.0", pad: V3_PAD, router: V3_ROUTER },
+  { gen: "2.0", pad: "0x770331a9accdb53ACb4a45B6c5B7D151fADCe557", router: "0xa83209d6bfC2B220cD86410cCDDC71FEb354844a" },
+  { gen: "2.0 金库版", pad: "0xE90851A90C6278E3d6e4C24320101f8B13D90A11", router: "0xAcd4944A4090c13d9DACAe60f3019cef9d9bB1Ad" },
+  { gen: "3.0", pad: "0x2bEbED4be8c8F46C17776C71D7a6A45dbC5CAB29", router: "0xec9717E5C68b9F18fA76D3961C9Cd7e67b5E61e7" },
+];
 const WBNB = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 const VIRTUAL_TOKEN = 1_066_666_666_666_666_666_666_666_667n;
 const PAD = new ethers.Interface([
@@ -90,8 +98,12 @@ try { W = readFileSync(new URL(ACCT === "2" ? "../.wallet2" : "../.wallet", impo
 if (!/^0x[0-9a-fA-F]{40}$/.test(W ?? "")) W = (await baw(["wallet", "address"]))?.data?.addresses?.find((x) => x.binanceChainId === "56")?.address;
 if (!W) die("拿不到钱包地址");
 
-const c = await call(V3_PAD, PAD, "curves", [ca]);
-if (c.creator === ethers.ZeroAddress) die("不是 Gang V3 发射台上的币(打新币或别的平台的币不在这里交易)");
+let c = null, PAD_ADDR = null, ROUTER_ADDR = null;
+for (const g of PADS) {
+  const r = await call(g.pad, PAD, "curves", [ca]).catch(() => null);
+  if (r && r.creator !== ethers.ZeroAddress) { c = r; PAD_ADDR = g.pad; ROUTER_ADDR = g.router; if (g.gen !== "1.0") log(`Gang ${g.gen} 发射台的币`); break; }
+}
+if (!c) die("不是 Gang V3 系列发射台(1.0 / 2.0 / 金库版 / 3.0)上的币(打新币或别的平台的币不在这里交易)");
 const sym = await call(ca, E, "symbol").then((r) => r[0]).catch(() => "?");
 const quote = ethers.getAddress(c.quote), isWbnb = quote.toLowerCase() === WBNB.toLowerCase();
 const qSym = isWbnb ? "WBNB" : await call(quote, E, "symbol").then((r) => r[0]).catch(() => "底池币");
@@ -143,7 +155,7 @@ async function run(label, to, data, value = 0n, { allowApp = false } = {}) {
 }
 
 if (side === "buy") {
-  const [agent, room] = await Promise.all([call(V3_PAD, PAD, "isAgent", [W]).then((r) => r[0]), call(V3_PAD, PAD, "walletRoom", [ca, W]).then((r) => r[0])]);
+  const [agent, room] = await Promise.all([call(PAD_ADDR, PAD, "isAgent", [W]).then((r) => r[0]), call(PAD_ADDR, PAD, "walletRoom", [ca, W]).then((r) => r[0])]);
   if (!agent) die(`钱包 ${W} 没有 Agent ID,V3 内盘买不了(先在 Binance App 领 .ai ID)`);
   if (room === 0n) die("这个币你已经买到单钱包上限(总量 1%)了");
   // 要花多少底池币:--bnb 直接用;否则按曲线公式算买到目标数量的花费(恒积:x = 虚拟代币 − 已卖,y = 虚拟 + 真实底池币),再加 1% 手续费和 2% 余量
@@ -162,10 +174,10 @@ if (side === "buy") {
   if (isWbnb) {
     if (maxBnb !== null && quoteIn > ethers.parseEther(String(maxBnb))) die(`约需 ${ethers.formatEther(quoteIn)} BNB,超过上限 ${maxBnb} BNB,不买(钱没动)`);
     let out;
-    try { out = (await call(V3_ROUTER, ROUTER, "v3BuyBNB", [ca, 0n, deadline()], { from: W, value: quoteIn }))[0]; } catch (e) { die(`模拟失败:${why(e)}(钱没动)`); }
+    try { out = (await call(ROUTER_ADDR, ROUTER, "v3BuyBNB", [ca, 0n, deadline()], { from: W, value: quoteIn }))[0]; } catch (e) { die(`模拟失败:${why(e)}(钱没动)`); }
     const minOut = minOf(out);
     log(`经 GangRouter 直接付 BNB:预计 ${ethers.formatEther(out)} 个,最少 ${ethers.formatEther(minOut)}(滑点 ${slip}%);超过上限的部分以 WBNB 退回钱包`);
-    const rc = await run("买入", V3_ROUTER, ROUTER.encodeFunctionData("v3BuyBNB", [ca, minOut, deadline()]), quoteIn);
+    const rc = await run("买入", ROUTER_ADDR, ROUTER.encodeFunctionData("v3BuyBNB", [ca, minOut, deadline()]), quoteIn);
     if (rc) log(`✓ 完成  现在持有 ${ethers.formatEther(await balanceOf(ca, W))} 个 ${sym}`);
     process.exit(0);
   }
@@ -204,35 +216,35 @@ if (side === "buy") {
     for (let i = 0; i < 15; i++) { have = await balanceOf(quote, W); if (have >= quoteIn) break; await sleep(400); }
     if (have < quoteIn) { if (have * 100n < quoteIn * 97n) die(`${qSym} 还是不够(有 ${ethers.formatEther(have)},需 ${ethers.formatEther(quoteIn)})`); quoteIn = have; }
   }
-  if ((await call(quote, E, "allowance", [W, V3_PAD]))[0] < quoteIn) {
+  if ((await call(quote, E, "allowance", [W, PAD_ADDR]))[0] < quoteIn) {
     log(`授权 ${ethers.formatEther(quoteIn)} ${qSym} 给 V3 发射台(只授权这一次的数量)`);
     if (DRY) { log("--dry:需要先授权,授权和买入都不做"); process.exit(0); }
-    await run("授权", quote, E.encodeFunctionData("approve", [V3_PAD, quoteIn]));
+    await run("授权", quote, E.encodeFunctionData("approve", [PAD_ADDR, quoteIn]));
   }
   let out;
-  try { out = (await call(V3_PAD, PAD, "buy", [ca, quoteIn, 0n], { from: W }))[0]; } catch (e) { die(`模拟失败:${why(e)}`); }
+  try { out = (await call(PAD_ADDR, PAD, "buy", [ca, quoteIn, 0n], { from: W }))[0]; } catch (e) { die(`模拟失败:${why(e)}`); }
   const minOut = minOf(out);
   log(`预计 ${ethers.formatEther(out)} 个,最少 ${ethers.formatEther(minOut)}(滑点 ${slip}%)`);
-  const rc = await run("买入", V3_PAD, PAD.encodeFunctionData("buy", [ca, quoteIn, minOut]));
+  const rc = await run("买入", PAD_ADDR, PAD.encodeFunctionData("buy", [ca, quoteIn, minOut]));
   if (rc) log(`✓ 完成  现在持有 ${ethers.formatEther(await balanceOf(ca, W))} 个 ${sym}`);
 } else {
   const bal = await balanceOf(ca, W);
   if (bal === 0n) die(`${W} 没有 ${sym}`);
   const amount = Number(pctRaw) >= 100 ? bal : (bal * BigInt(Math.round(Number(pctRaw) * 100))) / 10000n;
   log(`${sym} ${ca}  卖 ${ethers.formatEther(amount)} 个(${pctRaw}%),拿回 ${qSym}`);
-  if ((await call(ca, E, "allowance", [W, V3_PAD]))[0] < amount) {
+  if ((await call(ca, E, "allowance", [W, PAD_ADDR]))[0] < amount) {
     log(`先授权 ${ethers.formatEther(amount)} 个给 V3 发射台(只授权这次卖出的数量)`);
     if (DRY) { log("--dry:需要先授权,授权和卖出都不做(卖出要等授权上链后才能模拟)"); process.exit(0); }
-    const ap = await run("授权", ca, E.encodeFunctionData("approve", [V3_PAD, amount]), 0n, { allowApp: true });
-    if (ap?.pending) for (let i = 0; i < 60 && (await call(ca, E, "allowance", [W, V3_PAD]))[0] < amount; i++) await sleep(5000);
-    if ((await call(ca, E, "allowance", [W, V3_PAD]))[0] < amount) die("授权 5 分钟内没确认上链,卖出没做");
+    const ap = await run("授权", ca, E.encodeFunctionData("approve", [PAD_ADDR, amount]), 0n, { allowApp: true });
+    if (ap?.pending) for (let i = 0; i < 60 && (await call(ca, E, "allowance", [W, PAD_ADDR]))[0] < amount; i++) await sleep(5000);
+    if ((await call(ca, E, "allowance", [W, PAD_ADDR]))[0] < amount) die("授权 5 分钟内没确认上链,卖出没做");
   }
   let out;
-  try { out = (await call(V3_PAD, PAD, "sell", [ca, amount, 0n], { from: W }))[0]; } catch (e) { die(`模拟失败:${why(e)}`); }
+  try { out = (await call(PAD_ADDR, PAD, "sell", [ca, amount, 0n], { from: W }))[0]; } catch (e) { die(`模拟失败:${why(e)}`); }
   const minOut = minOf(out);
   log(`预计拿回 ${ethers.formatEther(out)} ${qSym}(已扣 1% 手续费,内盘不收税),最少 ${ethers.formatEther(minOut)}(滑点 ${slip}%)`);
   const before = await balanceOf(quote, W);
-  const rc = await run("内盘卖出", V3_PAD, PAD.encodeFunctionData("sell", [ca, amount, minOut]), 0n, { allowApp: true });
+  const rc = await run("内盘卖出", PAD_ADDR, PAD.encodeFunctionData("sell", [ca, amount, minOut]), 0n, { allowApp: true });
   if (!rc || KEEP) process.exit(0);
   let got = 0n;
   for (let i = 0; i < (rc.pending ? 100 : 10) && got <= 0n; i++) { got = (await balanceOf(quote, W)) - before; if (got <= 0n) await sleep(rc.pending ? 3000 : 400); }

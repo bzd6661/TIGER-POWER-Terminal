@@ -580,7 +580,7 @@
       <div class="side-tabs"><button class="b on" data-v="buy">买入</button><button class="s" data-v="sell">卖出</button></div>
 
       <div id="buyBox">
-        <div class="grp" id="pctGrp"><div class="lbl"><span>按比例(每钱包上限 1%)</span></div><div class="qgrid two buyq" id="pctBtns"></div><div class="custom"><div class="in"><input id="pctIn" inputmode="decimal" placeholder="自定义比例 0.01–1"><span class="faint">% 总量</span></div><button id="pctGo">买入</button></div><div class="faint" style="font-size:11px;margin-top:4px">超过这个号剩余的额度时,自动按剩余额度买满</div></div>
+        <div class="grp" id="pctGrp"><div class="lbl"><span id="pctLbl">按比例(每钱包上限 1%)</span></div><div class="qgrid two buyq" id="pctBtns"></div><div class="custom"><div class="in"><input id="pctIn" inputmode="decimal" placeholder="自定义比例 0.01–1"><span class="faint">% 总量</span></div><button id="pctGo">买入</button></div><div class="faint" id="pctNote" style="font-size:11px;margin-top:4px">超过这个号剩余的额度时,自动按剩余额度买满</div></div>
         <div class="grp" id="bnbGrp">
           <div class="lbl"><span>按 BNB</span><span id="bal" class="num"></span></div>
           <div class="qgrid buyq" id="bnbBtns"></div>
@@ -1105,7 +1105,7 @@ async function openTrader(addr) {
 }
 
 // ---------- 实时推送(链上事件 → 服务器 → 这里) ----------
-const PLAT = { four: "four", gangv1: "Gang", gangv2: "Gang V2", gangv3: "Gang V3", idagent: "Flap 内盘", flapportal: "Flap 门槛盘" };
+const PLAT = { four: "four", gangv1: "Gang", gangv2: "Gang V2", gangv3: "Gang V3", idagent: "Flap 内盘", flapportal: "Flap 门槛盘", agentcurve: "AgentCurve" };
 const feed = [];   // 全市场:最近的新盘 / 成交
 let es = null, esOk = false, symMap = {}, symAt = 0;
 let soundOn = false;
@@ -1266,7 +1266,7 @@ function renderHeadTools() {
 // ---------- 账户总览的附加区块:设置 / 底池币 / 授权 / 耗时 ----------
 let xSettings = null, xQuotes = null, xApprovals = null, xLatency = null;
 // 下单耗时的键「gangv2·buy」→「Gang V2 · 买」
-const LAT_PLAT = { four: "four.meme", gangv1: "Gang V1", gangv2: "Gang V2", gangv3: "Gang V3", idagent: "Flap 内盘", flapportal: "Flap 门槛盘", dex: "外盘 DEX" };
+const LAT_PLAT = { four: "four.meme", gangv1: "Gang V1", gangv2: "Gang V2", gangv3: "Gang V3", idagent: "Flap 内盘", flapportal: "Flap 门槛盘", agentcurve: "AgentCurve", dex: "外盘 DEX" };
 function latKey(k) {
   const [p, s] = String(k ?? "").split("·").map((x) => x.trim());
   const pn = LAT_PLAT[p] ?? p, sn = s === "buy" ? "买" : s === "sell" ? "卖" : s;
@@ -1460,7 +1460,7 @@ function markQbBtn() { const b = $("qbTog"); if (b) b.classList.toggle("on", qb.
 // ---------- 交易区 ----------
 function caps() {
   const d = cur, inner = d?.stage === "inner";
-  return { pct: !!d && inner && ["four", "gangv1", "gangv2", "gangv3", "flapportal"].includes(d.platform), bnb: !!d && (!inner || ["four", "idagent", "dex", "flapportal"].includes(d.platform)) };
+  return { pct: !!d && inner && ["four", "gangv1", "gangv2", "gangv3", "flapportal", "agentcurve"].includes(d.platform), bnb: !!d && (!inner || ["four", "idagent", "dex", "flapportal", "agentcurve"].includes(d.platform)) };
 }
 const SLIPS = ["", "3", "5", "10", "20", "35"];
 try { ui.slip = localStorage.getItem("slip") ?? ""; } catch { ui.slip = ""; }
@@ -1469,6 +1469,7 @@ function defaultSlip(action = ui.side) {
   const d = cur; if (!d) return null;
   if (d.stage !== "inner" || d.platform === "dex") return 10;
   if (d.platform?.startsWith("gang")) return action === "sell" ? 5 : 1;
+  if (d.platform === "agentcurve") return 5;
   return d.platform === "four" && action === "sell" ? 10 : 30;
 }
 function renderSlip() {
@@ -1503,11 +1504,15 @@ function renderTrade() {
   const inner = d?.stage === "inner", gang = d?.platform?.startsWith("gang");
   $("appSw").hidden = !(ui.side === "sell" && inner && gang);
   $("hint").textContent = !d ? "先在上面粘贴一个 CA" : ui.side === "sell"
-    ? (inner && gang ? "Gang 内盘卖出会被币安钱包风控标记;不打开上面的开关就不会提交。" : !inner ? "外盘:用币安钱包兑换卖成 BNB。" : "内盘卖回曲线,会先精确授权要卖的数量。")
+    ? (inner && gang ? "Gang 内盘卖出会被币安钱包风控标记;不打开上面的开关就不会提交。" : !inner ? "外盘:用币安钱包兑换卖成 BNB。" : d.platform === "agentcurve" ? "AgentCurve:直接卖回曲线换 BNB,不用授权。" : "内盘卖回曲线,会先精确授权要卖的数量。")
     : !inner ? "外盘:用币安钱包兑换买入。"
     : d.platform === "four" ? "four.meme:超过 1% 会自动卡在上限,多付的退回。"
     : gang ? `Gang:按代币数量买${d.platform === "gangv3" && unit === "BNB" ? ",经官方 GangRouter 直接用 BNB,超过上限的以 WBNB 退回" : d.platform === "gangv2" || d.platform === "gangv3" ? ",先用 BNB 换 " + unit + "、精确授权再买" : ",直接用 BNB,多付的退回"}。毕业前卖出会被钱包风控标记。`
-    : d.platform === "idagent" ? "Flap 内盘:按 BNB 买。" : "";
+    : d.platform === "idagent" ? "Flap 内盘:按 BNB 买。"
+    : d.platform === "agentcurve" ? "AgentCurve:按 BNB 买(单笔超过 1 BNB 自动拆成几笔),买卖各 1% 手续费;买完要隔一个区块才能卖。" : "";
+  const ac = d?.platform === "agentcurve";
+  $("pctLbl").textContent = ac ? "按比例(总量 2100 万,1% = 21 万个)" : "按比例(每钱包上限 1%)";
+  $("pctNote").textContent = ac ? "按现价估算要花多少 BNB 再买,没有单钱包上限" : "超过这个号剩余的额度时,自动按剩余额度买满";
   renderSlip(); if ($("qbPanel")) renderQb();
   // 余额 / 持仓提示
   if (wallets) {
@@ -1934,9 +1939,9 @@ try { if (localStorage.getItem("msOff") === "1") setMs(true); } catch {}
 // 左侧扫链栏的标签:平台、底池币、发射后税、分红 / 不分红、门槛盘、防狙击税(颜色和扫链页一致)
 const PDOT = (p) => (p === "four" ? "pd-four" : String(p || "").startsWith("gang") ? "pd-gang" : p === "idagent" || p === "flapportal" ? "pd-flap" : "");
 // 币名后面的平台小角标:F / G1 / G2 / G3 / Flap / 门槛
-const MS_MARK = { four: "F", gangv1: "G1", gangv2: "G2", gangv3: "G3", idagent: "Flap", flapportal: "门槛" };
+const MS_MARK = { four: "F", gangv1: "G1", gangv2: "G2", gangv3: "G3", idagent: "Flap", flapportal: "门槛", agentcurve: "AC" };
 const msMark = (t) => (MS_MARK[t.platform] ? `<i class="msmk ${PDOT(t.platform)}" title="${esc(MS_PLAT[t.platform] ?? "")}">${MS_MARK[t.platform]}</i>` : "");
-const MS_PLAT = { four: "four", gangv1: "Gang V1", gangv2: "Gang V2", gangv3: "Gang V3", idagent: "Flap", flapportal: "Flap 门槛" };
+const MS_PLAT = { four: "four", gangv1: "Gang V1", gangv2: "Gang V2", gangv3: "Gang V3", idagent: "Flap", flapportal: "Flap 门槛", agentcurve: "AgentCurve" };
 function msTags(t) {
   const out = [];
   // 一行只放:税、分红 / 不分红、需 Agent ID(平台在币名后的角标);都没有时显示底池币;防狙击税放进整行的 title
@@ -1980,7 +1985,7 @@ const PF = [["all", "全部"], ["four", "four"], ["gang", "Gang"], ["idagent", "
 const pfOf = (t) => t.platform === "four" ? "four" : t.platform?.startsWith("gang") ? "gang" : t.platform === "idagent" ? "idagent" : "other";
 let pfSel = "all";
 // 左侧持仓第二行用的平台简称
-const HPLAT = { four: "four", gangv1: "Gang", gangv2: "V2", gangv3: "V3", idagent: "Flap", flapportal: "Flap 门槛", dex: "DEX" };
+const HPLAT = { four: "four", gangv1: "Gang", gangv2: "V2", gangv3: "V3", idagent: "Flap", flapportal: "Flap 门槛", agentcurve: "AgentCurve", dex: "DEX" };
 try { pfSel = localStorage.getItem("pf") || "all"; } catch {}
 // 左侧持仓 / 账户总览:两个号合计的现值和剩余成本。能折成 BNB 的按 BNB(t.bnb:后端按买卖时实际兑换的汇率算成本),否则按底池币
 function aggPos(t) {

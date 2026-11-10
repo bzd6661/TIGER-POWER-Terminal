@@ -16,6 +16,8 @@ const GANG_V1 = "0x315ba2e8952d06094cc636b2b84229fa32fb23a7";
 const GANG_V2 = ["0x1b8f3f69dfa0a7f63d308c7eb0fd38d8b099966e", "0xf81c4e51c48466c6025b0165b1ea0f6978c712cb", "0x60aee38576035e757ded30ff8db8a8da476430c1"];
 // Gang V3(合并发射台,2026-10-27 主网):Buy / Sell / Graduated 和 V2 字段一样,Created 少一个 taxed
 const GANG_V3 = "0x15cfd2dc8278fb87a1783ef42111618e20874365";
+// 同一套曲线的 2.0 / 2.0 金库版 / 3.0 发射台:Buy / Sell / Created / Graduated 的签名和 V3 一样,按 V3 解析
+const GANG_V3_MORE = ["0x770331a9accdb53acb4a45b6c5b7d151fadce557", "0xe90851a90c6278e3d6e4c24320101f8b13d90a11", "0x2bebed4be8c8f46c17776c71d7a6a45dbc5cab29"];
 const FACTORY = "0xc55820f24015be7c4f18949d9e1363a3609b300e";
 const MULTICALL = "0xcA11bde05977b3631167028862bE2a173976CA11";
 const T_MARKET_CREATED = "0x43b6c538b8819c1b3e890b74547d06fab2c5d4bdd0df442dd16035f7262cd355";
@@ -106,7 +108,7 @@ function decode(l) {
       }
       return null;
     }
-    const isV1 = a === GANG_V1, isV3 = a === GANG_V3, isV2 = GANG_V2.includes(a) || isV3;
+    const isV1 = a === GANG_V1, isV3 = a === GANG_V3 || GANG_V3_MORE.includes(a), isV2 = GANG_V2.includes(a) || isV3;
     if (isV1 || isV2) {
       let ev = null; try { ev = (isV1 ? v1I : isV3 ? v3I : v2I).parseLog(l); } catch {}
       if (!ev) return null;
@@ -163,7 +165,7 @@ async function handle(l, via) {
 
 // ---------- WebSocket 订阅 ----------
 let ws = null, subId = null, wsTimer = null, lastWsMsg = 0;
-const watchList = () => [CORE, GANG_V1, ...GANG_V2, GANG_V3, FACTORY, ...marketToken.keys()];
+const watchList = () => [CORE, GANG_V1, ...GANG_V2, GANG_V3, ...GANG_V3_MORE, FACTORY, ...marketToken.keys()];
 function connect() {
   clearTimeout(wsTimer);
   try { ws?.close(); } catch {}
@@ -208,7 +210,7 @@ async function poll() {
   try {
     // 公共节点是负载均衡的几台,有的会落后一两个块:补查只查到 最新 − 2(最新的块订阅已经推过了)
     const head = parseInt(await rpc("eth_blockNumber", []), 16) - 2;
-    await pollGroup("core", [CORE, GANG_V1, ...GANG_V2, GANG_V3, FACTORY], head);
+    await pollGroup("core", [CORE, GANG_V1, ...GANG_V2, GANG_V3, ...GANG_V3_MORE, FACTORY], head);
     const ms = [...marketToken.keys()];
     const groups = Math.ceil(ms.length / 10);
     if (groups) { const g = rr++ % groups; await pollGroup("m" + g, ms.slice(g * 10, g * 10 + 10), head); }
@@ -228,7 +230,7 @@ export async function startLive() {
 // 钱包追踪的历史回补用:按交易者过滤的日志查询条件 + 同一个解码器
 //   four TradeExecuted / Gang Buy、Sell 的 topic2 都是交易者;Flap 内盘 成交事件的 topic2 也是交易者(不限合约地址,解码时只认已知市场)
 export const TRADER_LOG_SOURCES = {
-  addresses: [CORE, GANG_V1, ...GANG_V2, GANG_V3],
+  addresses: [CORE, GANG_V1, ...GANG_V2, GANG_V3, ...GANG_V3_MORE],
   topics: [fourI.getEvent("TradeExecuted").topicHash, v1I.getEvent("Buy").topicHash, v1I.getEvent("Sell").topicHash, v2I.getEvent("Buy").topicHash, v2I.getEvent("Sell").topicHash],
   idTopic: T_ID_TRADE,
 };

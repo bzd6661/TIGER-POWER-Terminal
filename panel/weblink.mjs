@@ -371,7 +371,7 @@ export function clampWebSlip(slip, action = "buy") {
 //   ⚠ 改了哪个脚本的 --slip 默认值、或 route() 加了新脚本,这张表要跟着改 —— tests/weblink-order.test.mjs 会读脚本源码核对,对不上就失败
 export const SCRIPT_DEFAULT_SLIP = new Map([
   ["fourbuy.mjs", 30], ["foursell.mjs", 30], ["fast.mjs", 30], ["sell.mjs", 30],
-  ["dexbuy.mjs", 10], ["dexsell.mjs", 10], ["flapportal.mjs", 10],
+  ["dexbuy.mjs", 10], ["dexsell.mjs", 10], ["flapportal.mjs", 10], ["agentcurve.mjs", 5],
   ["gang/gangv1buy.mjs", 1], ["gang/gangbuy.mjs", 1],
   ["gang/gangv1sell.mjs", 5], ["gang/gangv2sell.mjs", 5], ["gang/gangv3.mjs", 5],
 ]);

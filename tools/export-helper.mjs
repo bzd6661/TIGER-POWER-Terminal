@@ -25,7 +25,7 @@ const DEFAULT_ROOT = fileURLToPath(new URL("../", import.meta.url));
 
 // 起点:下单会起的脚本(server.mjs 的 route() / 跟单 / 转账 / 自动转出 / 自动领取 / 打赏)+ 助手本身
 const START = [
-  "fast.mjs", "sell.mjs", "fourbuy.mjs", "foursell.mjs", "dexbuy.mjs", "dexsell.mjs", "flapportal.mjs", "transfer.mjs", "claim.mjs", "tip.mjs",
+  "fast.mjs", "sell.mjs", "fourbuy.mjs", "foursell.mjs", "dexbuy.mjs", "dexsell.mjs", "flapportal.mjs", "agentcurve.mjs", "transfer.mjs", "claim.mjs", "tip.mjs",
   "gang/gangbuy.mjs", "gang/gangv1buy.mjs", "gang/gangv1sell.mjs", "gang/gangv2sell.mjs", "gang/gangv3.mjs",
   "panel/server.mjs", "panel/setup.mjs", "panel/daemon.mjs",
 ];

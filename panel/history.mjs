@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { provider } from "./detect.mjs";
 import { bnbUsd } from "./prices.mjs";
 import { flapTrades, isGatedKnown } from "./flapnft.mjs";
+import { curveTrades, curvePartial } from "./curvetrades.mjs";
 import { loadTrades, saveTrades, loadBars, saveBars, fetchJsonCached } from "./cache.mjs";
 
 const CORE = "0xebe7b6C1089D9F72aD07f34E36d898e44E5e27f3";
@@ -272,10 +273,11 @@ async function historyOnce(d) {
   else if (d.platform === "gangv1" || d.platform === "gangv2" || d.platform === "gangv3") { trades = await gangTrades(ca, d.platform === "gangv3" ? "v3" : d.platform === "gangv2"); source = "gang.fun"; }
   else if (d.platform === "idagent" && d.market) { trades = await idagentTrades(d.market); source = "fsi.taxed.fun"; }
   // Flap Portal 盘(门槛盘):Portal 的 TokenBought / TokenSold 事件;已发射又不在门槛盘登记表里的不翻链(外盘部分走 K 线)
+  else if (d.platform === "agentcurve") { trades = await curveTrades(ca); source = "AgentCurve 链上事件"; if (curvePartial(ca)) c_partial.add(ca); }
   else if (d.platform === "flapportal" && (d.stage === "inner" || isGatedKnown(ca))) { trades = await flapTrades(ca); source = "Flap Portal 链上事件"; if (!HAS_PRIVATE) c_partial.add(ca); }
   // 底池币美元价:Gang V2 用 gang 接口给的,Flap 内盘 的 quote 是地址
   const qUsd = await quoteUsdOf(d.platform === "flapportal" ? d.quoteAddress ?? "BNB" : d.quote, d.platform === "gangv2" || d.platform === "gangv3" || d.platform === "flapportal" ? d.quoteUsd : null);
-  const supply = d.platform === "four" ? d.supply : d.platform?.startsWith("gang") || d.platform === "idagent" || d.platform === "flapportal" ? 1e9 : null;
+  const supply = d.platform === "four" || d.platform === "agentcurve" ? d.supply : d.platform?.startsWith("gang") || d.platform === "idagent" || d.platform === "flapportal" ? 1e9 : null;
   // 外盘 K 线要往前补到内盘最后一笔成交,毕业前后才接得上(trades 新的在前)
   const dex = d.stage === "outer" ? await dexBars(ca, trades[0]?.ts ?? null) : null;
   const v = {

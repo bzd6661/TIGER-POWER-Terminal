@@ -98,6 +98,7 @@ function route(d, action, acct, arg, appConfirm = false) {
     if (d.platform === "gangv1") return { script: AGENTBUY + "gang/gangv1sell.mjs", args: [ca, "--pct", pct, ...A, ...(appConfirm ? ["--app-confirm"] : [])] };
     if (d.platform === "gangv2") return { script: AGENTBUY + "gang/gangv2sell.mjs", args: [ca, pct, ...A, ...(appConfirm ? ["--app-confirm"] : [])] };
     if (d.platform === "gangv3") return { script: AGENTBUY + "gang/gangv3.mjs", args: ["sell", ca, pct, ...A, ...(appConfirm ? ["--app-confirm"] : [])] };
+    if (d.platform === "agentcurve") return { script: AGENTBUY + "agentcurve.mjs", args: ["sell", ca, pct, ...A] };
     throw new Error("不知道怎么卖这个币");
   }
   // buy
@@ -123,6 +124,16 @@ function route(d, action, acct, arg, appConfirm = false) {
       amt = (Math.ceil(c * 1.05 * 1e5) / 1e5).toFixed(5);
     }
     return { script: AGENTBUY + "flapportal.mjs", args: ["buy", ca, amt, ...A] };
+  }
+  // AgentCurve 曲线:按 BNB 买;按比例买用「买 1%」的估价折成 BNB(没有单钱包上限,不多带)
+  if (d.platform === "agentcurve") {
+    let amt = bnb;
+    if (isPct) {
+      const c = d.cost1pctBnb ? d.cost1pctBnb * pctOf : null;
+      if (!c) throw new Error("报不出买 1% 的价格,请改填 BNB 数量");
+      amt = (Math.ceil(c * 1e5) / 1e5).toFixed(5);
+    }
+    return { script: AGENTBUY + "agentcurve.mjs", args: ["buy", ca, amt, ...A] };
   }
   if (d.platform === "gangv3") {
     if (!isPct) throw new Error("Gang 内盘请用「买 1% / 买 0.5%」");
@@ -497,7 +508,7 @@ ${n ? `<div style="color:#16c784;margin-top:16px">已配对的浏览器:${n} 个
       if (!ethers.isAddress(ca)) throw new Error("CA 格式不对");
       detectCached(ca, 4_000).then((d) => Promise.all([
         costsFor(d.ca, d.holdings),
-        ["four", "gangv1", "gangv2", "gangv3"].includes(d.platform) ? recentTrades(d.ca, d.platform) : null,
+        ["four", "gangv1", "gangv2", "gangv3", "agentcurve"].includes(d.platform) ? recentTrades(d.ca, d.platform) : null,
       ])).catch(() => {});
       return json(res, 200, { ok: true });
     }
@@ -510,7 +521,7 @@ ${n ? `<div style="color:#16c784;margin-top:16px">已配对的浏览器:${n} 个
       // 买入成本(从交易记录算)和最近成交(成交统计 + four 的市值)同时拉,不一个等一个
       const [costs, tr] = await Promise.all([
         costsFor(d.ca, d.holdings, d.quoteBnb).catch(() => ({})),
-        ["four", "gangv1", "gangv2", "gangv3"].includes(d.platform) ? recentTrades(d.ca, d.platform).catch(() => null) : null,
+        ["four", "gangv1", "gangv2", "gangv3", "agentcurve"].includes(d.platform) ? recentTrades(d.ca, d.platform).catch(() => null) : null,
       ]);
       d.costs = costs;
       d.stats = tradeStats(tr?.items);

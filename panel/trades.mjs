@@ -6,6 +6,7 @@ import { ethers } from "ethers";
 import { logRpc } from "./logrpc.mjs";
 import { provider } from "./detect.mjs";
 import { gangJson } from "./upstream.mjs";
+import { curveTrades } from "./curvetrades.mjs";
 
 const CORE = "0xebe7b6C1089D9F72aD07f34E36d898e44E5e27f3";
 const coreI = new ethers.Interface([
@@ -79,6 +80,13 @@ async function recentOnce(key, platform, ck) {
   let items = [], source = null;
   if (platform === "gangv1" || platform === "gangv2" || platform === "gangv3") { items = await gangTrades(key, platform === "gangv3" ? "v3" : platform === "gangv2"); source = "gang.fun"; }
   else if (platform === "four") { items = await fourTrades(key); source = "链上"; }
+  else if (platform === "agentcurve") {
+    items = (await curveTrades(key)).slice(0, 60);
+    const uniq = [...new Set(items.map((t) => t.trader))], names = await Promise.all(uniq.map((a) => handleOf(a)));
+    const map = Object.fromEntries(uniq.map((a, i) => [a, names[i]]));
+    items = items.map((t) => ({ ...t, handle: map[t.trader] }));
+    source = "链上";
+  }
   const data = { source, items };
   cache.set(ck, { at: Date.now(), data });
   if (cache.size > 500) cache.delete(cache.keys().next().value);

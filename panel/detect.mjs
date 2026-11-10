@@ -189,16 +189,22 @@ async function detectGang(ca, W) {
 }
 
 // Gang V3(合并发射台,2026-10-27 主网):直接读链上 curves();创建者 .ai 名字等从 gang.fun /v3/tokens 接口补(拿不到不影响)
-const GANG_V3_PAD = "0x15CFD2dc8278Fb87a1783ef42111618E20874365";
+//   同一套曲线的 2.0 / 2.0 金库版 / 3.0 发射台:curves() 和事件一样,按顺序查(地址同 gang/gangv3.mjs 的 PADS)
+const GANG_V3_PADS = [["V3", "0x15CFD2dc8278Fb87a1783ef42111618E20874365"], ["2.0", "0x770331a9accdb53ACb4a45B6c5B7D151fADCe557"],
+  ["2.0 金库版", "0xE90851A90C6278E3d6e4C24320101f8B13D90A11"], ["3.0", "0x2bEbED4be8c8F46C17776C71D7a6A45dbC5CAB29"]];
 const V3_VIRTUAL_TOKEN = 1_066_666_666_666_666_666_666_666_667n;
 const v3I = new ethers.Interface([
   "function curves(address token) view returns (address creator, address quote, uint128 realQuote, uint128 sold, uint128 gradAmt, uint128 virtualQuote, bool graduated, uint16 buyTaxBps, uint16 sellTaxBps, uint16 dividendBps, address pair, address refPair)",
 ]);
 async function detectGangV3(ca, W) {
-  const r = await provider.call({ to: GANG_V3_PAD, data: v3I.encodeFunctionData("curves", [ca]) }).catch(() => null);
-  if (!r || r === "0x") return null;
-  const c = v3I.decodeFunctionResult("curves", r);
-  if (c.creator === ethers.ZeroAddress) return null;
+  const curveOn = async (pad) => {
+    const r = await provider.call({ to: pad, data: v3I.encodeFunctionData("curves", [ca]) }).catch(() => null);
+    const c = r && r !== "0x" ? v3I.decodeFunctionResult("curves", r) : null;
+    return c && c.creator !== ethers.ZeroAddress ? c : null;
+  };
+  let c = null, gen = null;
+  for (const [g, pad] of GANG_V3_PADS) if ((c = await curveOn(pad))) { gen = g; break; }
+  if (!c) return null;
   const quote = c.quote.toLowerCase(), wb = quote === "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
   const [qInfo, api] = await Promise.all([
     wb ? null : erc20Info(c.quote).catch(() => null),
@@ -207,7 +213,7 @@ async function detectGangV3(ca, W) {
   const qSym = wb ? "BNB" : qInfo?.symbol ?? "?";
   const price = Number(ethers.formatEther(((c.virtualQuote + c.realQuote) * 10n ** 18n) / (V3_VIRTUAL_TOKEN - c.sold)));
   const res = {
-    platform: "gangv3", platformLabel: `Gang V3 · 底池 ${qSym}`, stage: c.graduated ? "outer" : "inner", quote: qSym, quoteAddress: wb ? null : quote,
+    platform: "gangv3", platformLabel: `Gang ${gen} · 底池 ${qSym}`, stage: c.graduated ? "outer" : "inner", quote: qSym, quoteAddress: wb ? null : quote,
     progress: c.graduated ? 100 : c.gradAmt > 0n ? Number((c.realQuote * 10000n) / c.gradAmt) / 100 : 0, pair: c.pair === ethers.ZeroAddress ? null : c.pair,
     supply: 1e9, onePctTokens: 10_000_000, priceQuote: price, holdings: {},
     taxed: Number(c.buyTaxBps) > 0 || Number(c.sellTaxBps) > 0, postTaxBuy: Number(c.buyTaxBps) / 100, postTaxSell: Number(c.sellTaxBps) / 100,
@@ -221,6 +227,35 @@ async function detectGangV3(ca, W) {
     const bal = await one(ca, "balanceOf", [w]).catch(() => 0n);
     const h = { tokens: fmt(bal) };
     if (bal > 0n && !c.graduated) h.value = price * fmt(bal);
+    res.holdings[k] = h;
+  }
+  return res;
+}
+
+// AgentCurve 单币曲线(aicurve.fun 的 AIC 等):合约本身就是代币 + 曲线;毕业前只有持 Agent ID 的钱包能买卖,按 BNB 买(单笔 ≤ 1 BNB,脚本自动拆)
+//   认法:合约自己有 curveReserve() / graduated() / spotPrice() / MAX_BUY()。总量 2100 万,曲线卖 1680 万、净储备 20 BNB 毕业
+const acI = new ethers.Interface([
+  "function curveReserve() view returns (uint256)", "function graduated() view returns (bool)", "function spotPrice() view returns (uint256)",
+  "function MAX_BUY() view returns (uint256)", "function pair() view returns (address)",
+]);
+const AC_SUPPLY = 21_000_000, AC_GRAD_BNB = 20;
+async function detectAgentCurve(ca, W) {
+  const rd = (fn) => provider.call({ to: ca, data: acI.encodeFunctionData(fn) }).then((r) => acI.decodeFunctionResult(fn, r)[0]);
+  const [reserve, grad, , pair] = await Promise.all([rd("curveReserve"), rd("graduated"), rd("MAX_BUY"), rd("pair").catch(() => ethers.ZeroAddress)]);
+  const price = grad ? null : Number(ethers.formatEther(await rd("spotPrice")));
+  const res = {
+    platform: "agentcurve", platformLabel: "AgentCurve 曲线 · 需 Agent ID", stage: grad ? "outer" : "inner", quote: "BNB",
+    progress: grad ? 100 : Math.min(100, Math.round((Number(ethers.formatEther(reserve)) / AC_GRAD_BNB) * 10000) / 100),
+    pair: pair === ethers.ZeroAddress ? null : pair, supply: AC_SUPPLY, onePctTokens: AC_SUPPLY / 100, priceQuote: price, holdings: {},
+  };
+  res.quoteUsd = await bnbUsd().catch(() => null);
+  if (res.quoteUsd && price) res.mcUsd = price * AC_SUPPLY * res.quoteUsd;
+  // 买 1% 的大概花费:现价 × 21 万 × 1.03(1% 手续费 + 曲线越买越贵)
+  if (!grad && price) { res.cost1pct = price * (AC_SUPPLY / 100) * 1.03; res.costHalfPct = res.cost1pct / 2; res.cost1pctBnb = res.cost1pct; }
+  for (const [k, w] of Object.entries(W)) {
+    const bal = await one(ca, "balanceOf", [w]).catch(() => 0n);
+    const h = { tokens: fmt(bal) };
+    if (bal > 0n && price) h.value = price * fmt(bal);
     res.holdings[k] = h;
   }
   return res;
@@ -257,10 +292,33 @@ async function detectFlapPortal(ca, W) {
   return res;
 }
 
+// Flap 底池发射(GMGN 标 flap_pool_launch):不走内盘,创建时直接在 PancakeSwap V2 开池(底池可以是 USDT 等)。
+//   认法:代币 owner() 是底池发射合约。交易照外盘走(dexbuy / dexsell),这里只补平台名、底池币、税率和分红。
+//   代币自带 buyTaxRate / sellTaxRate(万分比)、mainPool、quoteToken、dividendContract。
+const FLAP_POOL_LAUNCHER = "0x000042108465206185a077edc3f3fd2b49060000";
+const flapPoolI = new ethers.Interface([
+  "function owner() view returns (address)", "function buyTaxRate() view returns (uint256)", "function sellTaxRate() view returns (uint256)",
+  "function mainPool() view returns (address)", "function quoteToken() view returns (address)", "function dividendContract() view returns (address)",
+]);
+async function flapPoolInfo(ca) {
+  const rd = (fn) => provider.call({ to: ca, data: flapPoolI.encodeFunctionData(fn) }).then((r) => flapPoolI.decodeFunctionResult(fn, r)[0]);
+  if ((await rd("owner").catch(() => null))?.toLowerCase() !== FLAP_POOL_LAUNCHER) return null;
+  const [buyTax, sellTax, pool, quote, div] = await Promise.all(["buyTaxRate", "sellTaxRate", "mainPool", "quoteToken", "dividendContract"].map((f) => rd(f).catch(() => null)));
+  const qSym = !quote ? null : quote.toLowerCase() === "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c" ? "BNB" : (await erc20Info(quote).catch(() => null))?.symbol ?? null;
+  return {
+    platformLabel: `Flap 底池发射${qSym ? ` · 底池 ${qSym}` : ""}`, pair: pool && pool !== ethers.ZeroAddress ? pool : null,
+    taxed: (buyTax ?? 0n) > 0n || (sellTax ?? 0n) > 0n, postTaxBuy: Number(buyTax ?? 0n) / 100, postTaxSell: Number(sellTax ?? 0n) / 100,
+    dividend: !!div && div !== ethers.ZeroAddress,
+  };
+}
+
 async function detectPlain(ca, W, info) {
   const res = { platform: "dex", platformLabel: "其他 / 外盘代币", stage: "outer", quote: "BNB", holdings: {} };
-  for (const [k, w] of Object.entries(W)) res.holdings[k] = { tokens: fmt(await one(ca, "balanceOf", [w]).catch(() => 0n), info.decimals) };
-  return res;
+  const [pool] = await Promise.all([
+    flapPoolInfo(ca).catch(() => null),
+    ...Object.entries(W).map(async ([k, w]) => { res.holdings[k] = { tokens: fmt(await one(ca, "balanceOf", [w]).catch(() => 0n), info.decimals) }; }),
+  ]);
+  return pool ? { ...res, ...pool } : res;
 }
 
 // hint:扫链已经知道这个币是哪个平台时传进来,只问那一家(省掉等最慢的那家接口);问不到再全问一遍
@@ -268,7 +326,7 @@ export async function detect(caRaw, { hint } = {}) {
   const ca = ethers.getAddress(caRaw);
   const [code, W] = await Promise.all([provider.getCode(ca), addresses()]);   // W:只算本机已登录的账号
   if (code !== "0x" && hint) {
-    const one = hint === "four" ? detectFour : hint === "gangv3" ? detectGangV3 : String(hint).startsWith("gang") ? detectGang : hint === "idagent" ? detectIdAgent : hint === "flapportal" ? detectFlapPortal : null;
+    const one = hint === "four" ? detectFour : hint === "gangv3" ? detectGangV3 : String(hint).startsWith("gang") ? detectGang : hint === "idagent" ? detectIdAgent : hint === "flapportal" ? detectFlapPortal : hint === "agentcurve" ? detectAgentCurve : null;
     if (one) {
       const [info, hit] = await Promise.all([erc20Info(ca), one(ca, W).catch(() => null)]);
       if (hit) return { ca, symbol: info.symbol, name: info.name, wallets: W, ...hit };
@@ -280,10 +338,11 @@ export async function detect(caRaw, { hint } = {}) {
     if (idAgent) return { ca, symbol: "(未部署)", name: "", wallets: W, ...idAgent };
     throw new Error("这个地址上没有合约,也不是已知内盘的预测地址");
   }
-  const [info, four, idAgent, gang, gang3, flapP] = await Promise.all([
+  const [info, four, idAgent, gang, gang3, flapP, acurve] = await Promise.all([
     erc20Info(ca), detectFour(ca, W).catch(() => null), detectIdAgent(ca, W).catch(() => null), detectGang(ca, W).catch(() => null),
-    detectGangV3(ca, W).catch(() => null), detectFlapPortal(ca, W).catch(() => null),
+    detectGangV3(ca, W).catch(() => null), detectFlapPortal(ca, W).catch(() => null), detectAgentCurve(ca, W).catch(() => null),
   ]);
-  const hit = four || gang || gang3 || idAgent || flapP || (await detectPlain(ca, W, info));
+  // gang3 放在 gang 前面:gang.fun 的 /api/tokens 现在也返回 V3 的币,不先认链上 V3 就会被当成第一代
+  const hit = four || gang3 || gang || idAgent || flapP || acurve || (await detectPlain(ca, W, info));
   return { ca, symbol: info.symbol, name: info.name, wallets: W, ...hit };
 }

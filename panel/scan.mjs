@@ -211,21 +211,35 @@ async function idAgentRows() {
 
 // ---------- Gang ----------
 const isXaut = (a) => String(a || "").toLowerCase() === "0x21caef8a43163eea865baee23b9c2e327696a3bf";
+// gang.fun 每页 200 个、一页要 4-5 秒(云端更慢):第一页拿到后,其余页并行拉,每页失败重试一次;
+//   后面某页还是失败就只少那一页(整条线不作废)。三条线(第一代 / V2 / V3)各自记上次的好数据,哪条全挂就先用哪条上次的
+const gangLast = {};
+async function gangPage(path, off) {
+  const url = `https://gang.fun/api${path}${path.includes("?") ? "&" : "?"}limit=200&offset=${off}`;
+  for (let i = 0; ; i++) {
+    try { return (await fetch(url, { signal: AbortSignal.timeout(25000) }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })).items ?? []; }
+    catch (e) { if (i >= 1) throw e; }
+  }
+}
+async function gangList(path, max) {
+  try {
+    const first = await gangPage(path, 0);
+    if (first.length < 200) return (gangLast[path] = first);
+    const rest = await Promise.all(Array.from({ length: max / 200 - 1 }, (_, i) => gangPage(path, (i + 1) * 200).catch(() => [])));
+    const seen = new Set(), out = [];
+    for (const t of [first, ...rest].flat()) if (!seen.has(t.address)) { seen.add(t.address); out.push(t); }
+    return (gangLast[path] = out);
+  } catch (e) {
+    if (gangLast[path]) { console.error(`[扫链] Gang ${path} 没刷新,先用上次的:`, String(e?.message ?? e).slice(0, 200)); return gangLast[path]; }
+    throw e;
+  }
+}
 async function gangRows() {
-  const get = async (path) => {
-    let out = [];
-    for (let off = 0; off < 1000; off += 200) {
-      const j = await fetch(`https://gang.fun/api${path}${path.includes("?") ? "&" : "?"}limit=200&offset=${off}`, { signal: AbortSignal.timeout(15000) }).then((r) => r.json());
-      const it = j.items ?? [];
-      out = out.concat(it);
-      if (it.length < 200) break;
-    }
-    return out;
-  };
-  const [v1, v2, v3] = await Promise.all([get("/tokens?sort=new"), get("/stocks/tokens"), get("/v3/tokens").catch(() => [])]);
+  // V3(含 2.0 / 3.0 发射台的币)已经超过 1000 个,拉到 2000;老两条线币少,1000 够
+  const [v1, v2, v3] = await Promise.all([gangList("/tokens?sort=new", 1000), gangList("/stocks/tokens", 1000), gangList("/v3/tokens", 2000).catch(() => [])]);
   // gang.fun 给不出美元价的底池币(Ondo 代币化股票 FXIon 等,fdvUsd = 0):按底池币地址用 DexScreener 补
   const qUsd = {};
-  for (const q of [...new Set(v2.filter((t) => !Number(t.quoteUsd) && t.quoteAddress).map((t) => t.quoteAddress.toLowerCase()))]) qUsd[q] = await dexUsd(q).catch(() => null);
+  await Promise.all([...new Set(v2.filter((t) => !Number(t.quoteUsd) && t.quoteAddress).map((t) => t.quoteAddress.toLowerCase()))].map(async (q) => { qUsd[q] = await dexUsd(q).catch(() => null); }));
   const usdOf = (t) => qUsd[String(t.quoteAddress || "").toLowerCase()] || null;
   // gang.fun 接口按 18 位格式化底池币金额:XAUt(6 位)的筹集额 / 价格 / 成交额会小 10^12 倍,这里换回来
   const qk = (t) => (isXaut(t.quoteAddress) ? 1e12 : 1);
@@ -241,7 +255,7 @@ async function gangRows() {
   });
   // V3:接口给的是原始单位(realQuote)和底池币单位的价格;WBNB 底池按 BNB 价换美元,其他底池币用 DexScreener
   const bnbPx = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=BNBUSDT", { signal: AbortSignal.timeout(8000) }).then((r) => r.json()).then((j) => Number(j.price)).catch(() => null);
-  for (const q of [...new Set(v3.filter((t) => t.quoteSymbol !== "WBNB" && t.quoteAddress).map((t) => t.quoteAddress.toLowerCase()))]) if (!(q in qUsd)) qUsd[q] = await dexUsd(q).catch(() => null);
+  await Promise.all([...new Set(v3.filter((t) => t.quoteSymbol !== "WBNB" && t.quoteAddress).map((t) => t.quoteAddress.toLowerCase()))].filter((q) => !(q in qUsd)).map(async (q) => { qUsd[q] = await dexUsd(q).catch(() => null); }));
   const row3 = (t) => {
     const wb = t.quoteSymbol === "WBNB", px = wb ? bnbPx : qUsd[String(t.quoteAddress || "").toLowerCase()] ?? null, price = Number(t.priceQuote) || 0;
     return {
